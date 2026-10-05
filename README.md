@@ -232,8 +232,8 @@ e por isso são testados nativamente, sem Cloudflare.
 | 2 | Crate `mime`: parsing, sanitização, `cid:` e imagens remotas | ✅ |
 | 3 | Handler `email`: receber de verdade | ✅ |
 | 4 | Handler `queue`: processar, idempotente, DLQ, modo leve, reconciliação | ✅ |
-| 5 | API de leitura com paginação por cursor | ✅ (local; vai para produção com a Fase 6) |
-| 6 | Autenticação com Cloudflare Access | ✅ (local; falta ligar o Access em produção) |
+| 5 | API de leitura com paginação por cursor | ✅ |
+| 6 | Autenticação com Cloudflare Access | ✅ |
 | 7 | Busca, flags, pastas, ações em lote, regras de roteamento | |
 | 8 | Responder e enviar (Email Sending) | |
 | 9 | Retenção, métricas, logs estruturados, OpenAPI | |
