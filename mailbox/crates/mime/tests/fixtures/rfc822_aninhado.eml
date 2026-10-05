@@ -1,0 +1,39 @@
+Message-ID: <fwd.006@acmeco.com.br>
+Date: Fri, 09 Oct 2026 15:00:00 -0300
+From: Rosa <rosa@acmeco.com.br>
+To: contato@acmeco.com.br
+Subject: Fwd: Proposta comercial
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="out"
+
+--out
+Content-Type: text/plain; charset=utf-8
+
+Encaminhando a proposta abaixo.
+
+--out
+Content-Type: message/rfc822
+Content-Disposition: attachment
+
+Message-ID: <proposta.001@parceiro.com>
+Date: Thu, 08 Oct 2026 11:00:00 -0300
+From: Parceiro <vendas@parceiro.com>
+To: rosa@acmeco.com.br
+Subject: Proposta comercial
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="in"
+
+--in
+Content-Type: text/plain; charset=utf-8
+
+Segue a proposta em anexo.
+
+--in
+Content-Type: application/pdf; name="proposta.pdf"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="proposta.pdf"
+
+JVBERi0xLjQKJcOkw7zDtsOfCg==
+--in--
+
+--out--

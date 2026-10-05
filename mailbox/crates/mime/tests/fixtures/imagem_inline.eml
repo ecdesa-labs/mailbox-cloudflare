@@ -1,0 +1,21 @@
+Message-ID: <inline.003@acmeco.com.br>
+Date: Wed, 07 Oct 2026 12:00:00 -0300
+From: Marketing <marketing@acmeco.com.br>
+To: contato@acmeco.com.br
+Subject: Newsletter com logo
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="rel"
+
+--rel
+Content-Type: text/html; charset=utf-8
+
+<p>Nossa marca:</p><img src="cid:logo@acmeco" alt="logo"><img src="cid:inexistente@x" alt="quebrada">
+--rel
+Content-Type: image/png; name="logo.png"
+Content-Transfer-Encoding: base64
+Content-ID: <logo@acmeco>
+Content-Disposition: inline; filename="logo.png"
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M8AAAADAQEAehsu
+DwAAAABJRU5ErkJggg==
+--rel--

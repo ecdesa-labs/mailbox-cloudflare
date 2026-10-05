@@ -1,0 +1,17 @@
+message_id: None
+in_reply_to: []
+references: []
+from: Some(Address { name: None, address: "sistema@legado.local" })
+to: [Address { name: None, address: "contato@acmeco.com.br" }]
+cc: []
+reply_to: []
+subject: Some("Alerta sem Message-ID e sem Date")
+date_ms: None
+has_encoding_problem: false
+auth_results:
+attachments:
+--- text
+Mensagem minima, sem MIME-Version.
+
+--- html sanitizado
+<nenhum>

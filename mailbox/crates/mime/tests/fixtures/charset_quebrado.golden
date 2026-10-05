@@ -1,0 +1,20 @@
+message_id: Some("charset.004@cliente.com.br")
+in_reply_to: []
+references: []
+from: Some(Address { name: Some("Cliente Antigo"), address: "antigo@cliente.com.br" })
+to: [Address { name: None, address: "contato@acmeco.com.br" }]
+cc: []
+reply_to: []
+subject: Some("Atualização cadastral")
+date_ms: Some(1791460800000)
+has_encoding_problem: true
+auth_results:
+attachments:
+--- text
+Parte em latin1: ação, café, número.
+
+UTF-8 declarado com bytes invalidos: �� fim.
+
+Charset desconhecido: ok.
+--- html sanitizado
+<nenhum>

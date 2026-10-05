@@ -1,14 +1,11 @@
-//! bytes -> ParsedMessage, sanitização, reescrita de cid e imagens remotas.
-//! Puro. Conteúdo real na Fase 2.
+//! bytes -> ParsedMessage, sanitização de HTML, reescrita de `cid:` e
+//! bloqueio de imagens remotas. Puro: sem I/O e sem `worker`.
+//!
+//! Este crate não conhece IDs nem chaves do R2. Quem chama decide como
+//! resolver um `cid:` (ex.: para `/api/attachments/{id}`).
 
-#[cfg(test)]
-mod tests {
-    use mail_parser::MessageParser;
+mod parse;
+mod sanitize;
 
-    #[test]
-    fn parser_roda_nativo() {
-        let raw = b"Message-ID: <a@b>\r\nSubject: oi\r\n\r\ncorpo";
-        let msg = MessageParser::default().parse(&raw[..]).unwrap();
-        assert_eq!(msg.subject(), Some("oi"));
-    }
-}
+pub use parse::{parse, Address, Attachment, AuthResultsHeader, MimeError, ParsedMessage};
+pub use sanitize::{restore_remote_images, sanitize_html, REMOTE_SRC_ATTR};

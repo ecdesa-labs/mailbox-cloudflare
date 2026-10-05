@@ -1,0 +1,35 @@
+message_id: Some("alt.002@github.com")
+in_reply_to: ["orig.001@acmeco.com.br"]
+references: ["raiz.000@acmeco.com.br", "orig.001@acmeco.com.br"]
+from: Some(Address { name: Some("GitHub"), address: "noreply@github.com" })
+to: [Address { name: None, address: "dev@acmeco.com.br" }]
+cc: []
+reply_to: []
+subject: Some("Re: [acmeco/mailbox] CI passou")
+date_ms: Some(1791275400000)
+has_encoding_problem: false
+auth_results:
+attachments:
+--- text
+CI passou em main.
+
+--- html sanitizado
+
+<p>CI <b>passou</b> em <a href="https://github.com/acmeco/mailbox" target="_blank" rel="noopener noreferrer">main</a>.</p>
+
+<img width="1" height="1" data-remote-src="https://tracker.example/open.gif?u=123">
+<a target="_blank" rel="noopener noreferrer">clique</a>
+
+<table width="600" style="background-color:#f6f8fa"><tbody><tr><td>rodapé</td></tr></tbody></table>
+
+
+--- html com imagens remotas
+
+<p>CI <b>passou</b> em <a href="https://github.com/acmeco/mailbox" target="_blank" rel="noopener noreferrer">main</a>.</p>
+
+<img width="1" height="1" src="https://tracker.example/open.gif?u=123">
+<a target="_blank" rel="noopener noreferrer">clique</a>
+
+<table width="600" style="background-color:#f6f8fa"><tbody><tr><td>rodapé</td></tr></tbody></table>
+
+

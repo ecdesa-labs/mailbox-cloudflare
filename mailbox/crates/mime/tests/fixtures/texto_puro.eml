@@ -1,0 +1,19 @@
+Return-Path: <contato@cliente.com.br>
+Authentication-Results: mx.cloudflare.net; spf=pass smtp.mailfrom=cliente.com.br; dkim=pass header.d=cliente.com.br; dmarc=pass header.from=cliente.com.br
+Authentication-Results: forjado.example; spf=pass; dkim=pass; dmarc=pass
+Message-ID: <CAF+texto.001@cliente.com.br>
+Date: Mon, 05 Oct 2026 10:00:00 -0300
+From: =?UTF-8?Q?Jo=C3=A3o_da_Silva?= <Joao@Cliente.com.br>
+To: "ACMECO Contato" <contato@acmeco.com.br>, financeiro@acmeco.com.br
+Cc: undisclosed-recipients:;
+Reply-To: suporte@cliente.com.br
+Subject: =?UTF-8?B?T3LDp2FtZW50byBkZSBvdXR1YnJv?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Ol=C3=A1, tudo bem?
+
+Segue o or=C3=A7amento <com sinais> & s=C3=ADmbolos.
+Linha longa que foi quebrada pelo quoted-printable no meio de uma frase m=
+uito comprida.

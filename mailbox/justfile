@@ -24,7 +24,7 @@ test:
     cargo test -p mailbox-domain -p mailbox-application -p mailbox-mime
 
 check-wasm:
-    cargo check --target wasm32-unknown-unknown -p mailbox-adapters-cf -p mailbox-worker
+    cargo check --target wasm32-unknown-unknown -p mailbox-mime -p mailbox-adapters-cf -p mailbox-worker
 
 # Regra de dependência (seção 4.1): domain/application/mime não podem puxar `worker`.
 check-deps:

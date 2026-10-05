@@ -1,0 +1,18 @@
+message_id: Some("inline.003@acmeco.com.br")
+in_reply_to: []
+references: []
+from: Some(Address { name: Some("Marketing"), address: "marketing@acmeco.com.br" })
+to: [Address { name: None, address: "contato@acmeco.com.br" }]
+cc: []
+reply_to: []
+subject: Some("Newsletter com logo")
+date_ms: Some(1791385200000)
+has_encoding_problem: false
+auth_results:
+attachments:
+  #0 filename=Some("logo.png") type=image/png cid=Some("logo@acmeco") inline=true size=70 head="\u{89}PNG\r\n\u{1a}\n\0\0\0\rIHDR\0\0\0\u{1}\0\0\0\u{1}"
+--- text
+Nossa marca:
+
+--- html sanitizado
+<p>Nossa marca:</p><img alt="logo" src="/api/attachments/0"><img alt="quebrada">

@@ -186,7 +186,7 @@ e por isso são testados nativamente, sem Cloudflare.
 |---|---|---|
 | 0 | Scaffold: workspace, wrangler, CI | ✅ |
 | 1 | Domínio, migrações, value objects; configuração da instância | ✅ |
-| 2 | Crate `mime`: parsing, sanitização, `cid:` e imagens remotas | |
+| 2 | Crate `mime`: parsing, sanitização, `cid:` e imagens remotas | ✅ |
 | 3 | Handler `email`: receber de verdade | |
 | 4 | Handler `queue`: processar, idempotente, DLQ | |
 | 5 | API de leitura com paginação por cursor | |
@@ -196,6 +196,21 @@ e por isso são testados nativamente, sem Cloudflare.
 | 9 | Retenção, métricas, logs estruturados, OpenAPI | |
 
 O front (Next.js estático) é desenvolvido em paralelo.
+
+### Melhorias futuras
+
+- [ ] **Charsets asiáticos multibyte** (Shift_JIS, ISO-2022-JP, GB2312, GBK,
+  Big5, EUC-KR). Hoje viram texto com caracteres de substituição e a mensagem
+  sai com `has_encoding_problem`. Caminho: ligar o recurso `full_encoding` do
+  `mail-parser` (puxa o `encoding_rs`), medir o aumento do `.wasm` e adicionar
+  goldens com esses charsets.
+- [ ] **CSS em blocos `<style>`.** Hoje o `<style>` é removido inteiro (o
+  `ammonia` não sanitiza folhas de estilo), então emails de marketing perdem o
+  layout responsivo; os estilos inline (`style=""`) são mantidos. Caminho:
+  sanitizar a folha com `cssparser` (mesma lista de propriedades sem `url()`,
+  sem `@import`, `@font-face` nem seletores que escapem do email) ou converter
+  as regras em estilos inline no processamento e passar pelo filtro atual.
+  Nos dois casos, CSS não pode carregar nada de fora.
 
 ## Limitações conhecidas
 

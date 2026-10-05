@@ -1,0 +1,26 @@
+Message-ID: <charset.004@cliente.com.br>
+Date: Thu, 08 Oct 2026 09:00:00 -0300
+From: Cliente Antigo <antigo@cliente.com.br>
+To: contato@acmeco.com.br
+Subject: =?ISO-8859-1?Q?Atualiza=E7=E3o_cadastral?=
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="m"
+
+--m
+Content-Type: text/plain; charset=iso-8859-1
+Content-Transfer-Encoding: 8bit
+
+Parte em latin1: ação, café, número.
+
+--m
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+UTF-8 declarado com bytes invalidos: ÿþ fim.
+
+--m
+Content-Type: text/plain; charset=x-charset-que-nao-existe
+Content-Transfer-Encoding: 8bit
+
+Charset desconhecido: ok.
+--m--

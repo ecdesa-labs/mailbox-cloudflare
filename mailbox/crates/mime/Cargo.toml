@@ -5,5 +5,10 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+# Sem `full_encoding`: charsets de um byte (latin1, windows-125x, iso-8859-x)
+# já vêm por padrão; os multibyte asiáticos (shift_jis, gb2312...) puxariam o
+# encoding_rs. Charset desconhecido vira UTF-8 com substituição.
 mail-parser = "0.11"
 ammonia = "4"
+# Mesma versão usada pelo ammonia: a segunda passada no DOM usa o rcdom dele.
+html5ever = "0.40"

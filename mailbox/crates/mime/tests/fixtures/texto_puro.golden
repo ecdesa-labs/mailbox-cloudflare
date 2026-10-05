@@ -1,0 +1,22 @@
+message_id: Some("CAF+texto.001@cliente.com.br")
+in_reply_to: []
+references: []
+from: Some(Address { name: Some("João da Silva"), address: "Joao@Cliente.com.br" })
+to: [Address { name: Some("ACMECO Contato"), address: "contato@acmeco.com.br" }, Address { name: None, address: "financeiro@acmeco.com.br" }]
+cc: []
+reply_to: [Address { name: None, address: "suporte@cliente.com.br" }]
+subject: Some("Orçamento de outubro")
+date_ms: Some(1791205200000)
+has_encoding_problem: false
+auth_results:
+  AuthResultsHeader { authserv_id: "mx.cloudflare.net", spf: Some("pass"), dkim: Some("pass"), dmarc: Some("pass") }
+  AuthResultsHeader { authserv_id: "forjado.example", spf: Some("pass"), dkim: Some("pass"), dmarc: Some("pass") }
+attachments:
+--- text
+Olá, tudo bem?
+
+Segue o orçamento <com sinais> & símbolos.
+Linha longa que foi quebrada pelo quoted-printable no meio de uma frase muito comprida.
+
+--- html sanitizado
+<nenhum>
