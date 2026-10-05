@@ -414,6 +414,7 @@ dependencies = [
  "mailbox-application",
  "mailbox-domain",
  "serde",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -425,6 +426,7 @@ name = "mailbox-application"
 version = "0.0.0"
 dependencies = [
  "mailbox-domain",
+ "mailbox-mime",
 ]
 
 [[package]]

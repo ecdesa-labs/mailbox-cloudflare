@@ -1,5 +1,5 @@
 use mailbox_application::{Clock, IdGenerator};
-use mailbox_domain::{MessageId, UnixMs};
+use mailbox_domain::{IdentityId, MessageId, UnixMs};
 use wasm_bindgen::JsCast;
 
 pub struct WorkerClock;
@@ -15,8 +15,8 @@ impl Clock for WorkerClock {
 /// ULID com os 80 bits aleatórios do `crypto.getRandomValues` do runtime.
 pub struct CryptoIds;
 
-impl IdGenerator for CryptoIds {
-    fn message_id(&self, at: UnixMs) -> MessageId {
+impl CryptoIds {
+    fn random80() -> u128 {
         let mut buf = [0u8; 16];
         let crypto: web_sys::Crypto = js_sys::Reflect::get(&js_sys::global(), &"crypto".into())
             .expect("globalThis.crypto existe no Workers")
@@ -24,6 +24,16 @@ impl IdGenerator for CryptoIds {
         crypto
             .get_random_values_with_u8_array(&mut buf[6..])
             .expect("getRandomValues com 10 bytes não falha");
-        MessageId::from_parts(at, u128::from_be_bytes(buf))
+        u128::from_be_bytes(buf)
+    }
+}
+
+impl IdGenerator for CryptoIds {
+    fn message_id(&self, at: UnixMs) -> MessageId {
+        MessageId::from_parts(at, Self::random80())
+    }
+
+    fn identity_id(&self, at: UnixMs) -> IdentityId {
+        IdentityId::from_parts(at, Self::random80())
     }
 }

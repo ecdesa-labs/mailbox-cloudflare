@@ -116,6 +116,9 @@ mod tests {
             self.0.set(n);
             MessageId::from_parts(at, n)
         }
+        fn identity_id(&self, at: UnixMs) -> mailbox_domain::IdentityId {
+            mailbox_domain::IdentityId::from_parts(at, 0)
+        }
     }
 
     #[derive(Default)]
@@ -144,6 +147,10 @@ mod tests {
                 return Err(PortError("fila fora".into()));
             }
             self.jobs.borrow_mut().push(job.clone());
+            Ok(())
+        }
+        async fn enqueue_batch(&self, jobs: &[IngestJob]) -> Result<(), PortError> {
+            self.jobs.borrow_mut().extend(jobs.iter().cloned());
             Ok(())
         }
     }

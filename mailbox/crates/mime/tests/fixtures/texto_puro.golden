@@ -11,6 +11,7 @@ has_encoding_problem: false
 auth_results:
   AuthResultsHeader { authserv_id: "mx.cloudflare.net", spf: Some("pass"), dkim: Some("pass"), dmarc: Some("pass") }
   AuthResultsHeader { authserv_id: "forjado.example", spf: Some("pass"), dkim: Some("pass"), dmarc: Some("pass") }
+received_spf:
 attachments:
 --- text
 Olá, tudo bem?

@@ -9,6 +9,7 @@ mailbox-domain.workspace = true
 mailbox-application.workspace = true
 worker.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"

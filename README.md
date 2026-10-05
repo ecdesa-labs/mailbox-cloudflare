@@ -145,6 +145,8 @@ Todas as opções: `just configure --help`.
 | `just email-route <endereço>` | Manda um endereço específico para o Worker |
 | `just email-catchall` | Manda todos os endereços dos domínios para o Worker |
 | `just email-status` | Estado do Email Routing e das regras |
+| `just reprocess --key <raw_key> \| --failed \| --all` | Pede reprocessamento (o cron executa em até 10 min) |
+| `just failures` | Falhas de processamento e pedidos pendentes |
 
 ## A instância
 
@@ -234,11 +236,12 @@ O front (Next.js estático) é desenvolvido em paralelo.
 ## Limitações conhecidas
 
 - Email Routing aceita mensagens de até 25 MiB.
-- No plano Free, cada invocação tem 10 ms de CPU. Receber e gravar não
-  depende do tamanho (o `.eml` vai por stream para o R2). Emails acima de um
-  limiar são processados em **modo leve**: aparecem na caixa com remetente,
-  assunto e data, e o `.eml` fica para download, mas sem corpo nem anexos
-  indexados.
+- No plano Free, cada invocação tem 10 ms de CPU e 50 sub-requisições
+  (R2, D1 e fila contam). Receber e gravar não depende do tamanho (o `.eml`
+  vai por stream para o R2). Emails acima de 512 KiB são processados em
+  **modo leve** (remetente, assunto e data; o `.eml` fica para download), e
+  emails com mais de 30 anexos têm o texto indexado mas anexos e HTML só no
+  `.eml`. Os limiares ficam em `[vars]` no template do `wrangler.toml`.
 - No plano Free, mensagens da fila e da DLQ expiram em 24 h; o reprocessamento
   sempre parte do `.eml` no R2.
 - `wrangler d1 export` não exporta tabelas virtuais (a busca FTS5). Para

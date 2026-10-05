@@ -9,6 +9,7 @@ subject: Some("Atualização cadastral")
 date_ms: Some(1791460800000)
 has_encoding_problem: true
 auth_results:
+received_spf:
 attachments:
 --- text
 Parte em latin1: ação, café, número.

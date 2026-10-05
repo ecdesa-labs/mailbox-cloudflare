@@ -161,6 +161,33 @@ email-status:
         npx wrangler email routing rules list "$d"
     done
 
+# Pede reprocessamento ao cron (roda em até 10 min):
+#   just reprocess --key <raw_key>   um .eml
+#   just reprocess --failed          os que desistiram (ingest_failures)
+#   just reprocess --all             todos (ex.: depois de mudar a sanitização)
+reprocess MODE KEY="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ env }}
+    cd "{{ mailbox }}"
+    now=$(date +%s%3N)
+    case "$1" in
+        --key)
+            [[ "$2" =~ ^[a-z0-9.-]+/raw/[0-9]{4}/[0-9]{2}/[0-9A-Z]{26}\.eml$ ]] || { echo "raw_key inválido: $2" >&2; exit 1; }
+            sql="INSERT INTO reprocess_requests (mode, raw_key, created_at) VALUES ('key', '$2', $now)" ;;
+        --failed) sql="INSERT INTO reprocess_requests (mode, created_at) VALUES ('failed', $now)" ;;
+        --all)    sql="INSERT INTO reprocess_requests (mode, created_at) VALUES ('all', $now)" ;;
+        *) echo "uso: just reprocess --key <raw_key> | --failed | --all" >&2; exit 1 ;;
+    esac
+    npx wrangler d1 execute "$MAILBOX_DATABASE" --remote --command "$sql"
+    echo "Pedido gravado; o cron executa em até 10 min."
+
+# Falhas de processamento e pedidos de reprocessamento pendentes
+failures:
+    {{ env }} && cd "{{ mailbox }}" && npx wrangler d1 execute "$MAILBOX_DATABASE" --remote --command \
+        "SELECT raw_key, attempts, last_error, gave_up_at IS NOT NULL AS desistiu FROM ingest_failures ORDER BY updated_at DESC LIMIT 50; \
+         SELECT id, mode, raw_key, enqueued FROM reprocess_requests WHERE done_at IS NULL"
+
 # Sobe local com wrangler dev
 dev:
     cd "{{ mailbox }}" && just dev

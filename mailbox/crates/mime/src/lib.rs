@@ -7,5 +7,8 @@
 mod parse;
 mod sanitize;
 
-pub use parse::{parse, Address, Attachment, AuthResultsHeader, MimeError, ParsedMessage};
+pub use parse::{
+    parse, parse_headers, Address, Attachment, AuthResultsHeader, MimeError, ParsedMessage,
+    ReceivedSpf,
+};
 pub use sanitize::{restore_remote_images, sanitize_html, REMOTE_SRC_ATTR};

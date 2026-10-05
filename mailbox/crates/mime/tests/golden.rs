@@ -32,6 +32,10 @@ fn render(p: &ParsedMessage<'_>) -> String {
     for a in &p.auth_results {
         let _ = writeln!(s, "  {a:?}");
     }
+    let _ = writeln!(s, "received_spf:");
+    for r in &p.received_spf {
+        let _ = writeln!(s, "  {r:?}");
+    }
     let _ = writeln!(s, "attachments:");
     for a in &p.attachments {
         let head: String = a.data.iter().take(24).map(|&b| b as char).collect();

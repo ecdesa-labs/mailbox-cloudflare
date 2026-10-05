@@ -29,15 +29,32 @@ migrations_dir = "migrations"
 queue = "$queue"
 binding = "INGEST"
 
+# Plano Free: 10 ms de CPU e 50 sub-requisições por invocação. Um email por
+# invocação, para cada um ter o orçamento inteiro.
 [[queues.consumers]]
 queue = "$queue"
-max_batch_size = 5
+max_batch_size = 1
 max_retries = 3
 dead_letter_queue = "$dlq"
+
+# DLQ: só registra a desistência em ingest_failures (docs seção 6.6).
+[[queues.consumers]]
+queue = "$dlq"
+max_batch_size = 10
+max_retries = 3
+
+# Reconciliação R2 x D1 e pedidos de `just reprocess`.
+[triggers]
+crons = ["*/10 * * * *"]
 
 # Domínios atendidos pelo handler de email (o resto é rejeitado).
 [vars]
 MAILBOX_DOMAINS = "$domains"
+MAILBOX_DLQ = "$dlq"
+# Acima disso, modo leve (só headers). Calibrar pelo CPU real (observability).
+MAILBOX_FULL_MAX_BYTES = "524288"
+MAILBOX_MAX_ATTACHMENTS = "30"
+MAILBOX_RECONCILE_BUDGET = "50"
 
 [observability]
 enabled = true

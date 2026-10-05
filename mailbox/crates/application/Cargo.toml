@@ -6,3 +6,4 @@ publish.workspace = true
 
 [dependencies]
 mailbox-domain.workspace = true
+mailbox-mime = { path = "../mime" }

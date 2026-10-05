@@ -65,6 +65,26 @@ entity_id!(
 entity_id!(AttachmentId);
 entity_id!(RuleId);
 
+// IDs derivados: reprocessar a mesma mensagem gera os mesmos IDs, então as
+// URLs de anexo dentro do HTML e a thread continuam válidas.
+
+impl ThreadId {
+    /// Thread nova nasce com os bits da mensagem que a abriu.
+    pub fn rooted_at(message: MessageId) -> Self {
+        Self(message.0)
+    }
+}
+
+impl AttachmentId {
+    /// Mesmo instante da mensagem; os 80 bits aleatórios dela combinados com
+    /// a posição do anexo. Colidir exigiria duas mensagens com aleatórios
+    /// iguais exceto nos bits baixos (chance desprezível em 80 bits).
+    pub fn for_message(message: MessageId, ordinal: u32) -> Self {
+        let random = message.0.random() ^ (u128::from(ordinal) + 1);
+        Self(Ulid::from_parts(message.0.timestamp_ms(), random))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,6 +115,17 @@ mod tests {
         ] {
             assert!(MessageId::parse(s).is_err(), "{s}");
         }
+    }
+
+    #[test]
+    fn ids_derivados_sao_estaveis_e_distintos() {
+        let m = MessageId::from_parts(UnixMs::new(1_791_158_400_000).unwrap(), 0xABCD);
+        assert_eq!(ThreadId::rooted_at(m).to_string(), m.to_string());
+        let a0 = AttachmentId::for_message(m, 0);
+        assert_eq!(a0, AttachmentId::for_message(m, 0));
+        assert_ne!(a0, AttachmentId::for_message(m, 1));
+        assert_ne!(a0.to_string(), m.to_string());
+        assert_eq!(a0.timestamp(), m.timestamp());
     }
 
     #[test]

@@ -30,6 +30,10 @@ pub struct ParsedMessage<'a> {
     /// primeiro é o mais recente). Qualquer remetente pode forjar um; quem
     /// decide em qual confiar é quem chama, pelo `authserv_id`.
     pub auth_results: Vec<AuthResultsHeader>,
+    /// Todos os headers `Received-SPF`, na ordem do arquivo. O SPF do
+    /// remetente do envelope vem aqui; o `Authentication-Results` da
+    /// Cloudflare mede o SPF do HELO.
+    pub received_spf: Vec<ReceivedSpf>,
     /// Alguma parte tinha charset ou codificação problemática; o texto
     /// pode ter caracteres de substituição.
     pub has_encoding_problem: bool,
@@ -64,6 +68,14 @@ pub struct AuthResultsHeader {
     pub dmarc: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ReceivedSpf {
+    /// Valor de `receiver=`, em minúsculas (quem verificou).
+    pub receiver: Option<String>,
+    /// Primeiro token do header (`pass`, `fail`, `softfail`...), em minúsculas.
+    pub verdict: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MimeError {
     /// Nada que se pareça com uma mensagem (vazio, só lixo).
@@ -79,6 +91,63 @@ impl fmt::Display for MimeError {
 }
 
 impl std::error::Error for MimeError {}
+
+/// Modo leve (docs seção 6.2, passo 0): só os headers, sem decodificar
+/// corpo nem anexos. Barato o bastante para emails grandes no plano Free.
+pub fn parse_headers(raw: &[u8]) -> Result<ParsedMessage<'_>, MimeError> {
+    if raw.iter().all(u8::is_ascii_whitespace) {
+        return Err(MimeError::Unparseable);
+    }
+    let msg = MessageParser::default()
+        .parse_headers(raw)
+        .ok_or(MimeError::Unparseable)?;
+    let mut parsed = headers_of(&msg);
+    parsed.has_encoding_problem = parsed
+        .subject
+        .as_deref()
+        .is_some_and(|s| s.contains('\u{FFFD}'));
+    Ok(parsed)
+}
+
+/// Campos que só dependem dos headers. Corpo e anexos ficam vazios.
+fn headers_of<'a>(msg: &Message<'_>) -> ParsedMessage<'a> {
+    let named = |name: &str| {
+        msg.headers()
+            .iter()
+            .filter(|h| h.name().eq_ignore_ascii_case(name))
+            .filter_map(|h| h.value().as_text().map(str::to_owned))
+            .collect::<Vec<_>>()
+    };
+    ParsedMessage {
+        message_id: msg.message_id().map(clean_id).filter(|s| !s.is_empty()),
+        in_reply_to: ids(msg.in_reply_to()),
+        references: ids(msg.references()),
+        from: msg
+            .from()
+            .and_then(|a| addresses(Some(a)).into_iter().next()),
+        to: addresses(msg.to()),
+        cc: addresses(msg.cc()),
+        reply_to: addresses(msg.reply_to()),
+        subject: msg.subject().map(str::to_owned),
+        date_ms: msg
+            .date()
+            .map(|d| d.to_timestamp())
+            .filter(|&s| s > 0)
+            .and_then(|s| s.checked_mul(1000)),
+        text: None,
+        html: None,
+        attachments: Vec::new(),
+        auth_results: named("authentication-results")
+            .iter()
+            .map(|v| parse_auth_results(v))
+            .collect(),
+        received_spf: named("received-spf")
+            .iter()
+            .map(|v| parse_received_spf(v))
+            .collect(),
+        has_encoding_problem: false,
+    }
+}
 
 /// Lê um `.eml`. Tolerante: header quebrado vira `None`, charset ruim vira
 /// texto com substituição. Só falha se não houver mensagem alguma.
@@ -104,31 +173,9 @@ pub fn parse(raw: &[u8]) -> Result<ParsedMessage<'_>, MimeError> {
         .flatten();
 
     let mut parsed = ParsedMessage {
-        message_id: msg.message_id().map(clean_id).filter(|s| !s.is_empty()),
-        in_reply_to: ids(msg.in_reply_to()),
-        references: ids(msg.references()),
-        from: msg
-            .from()
-            .and_then(|a| addresses(Some(a)).into_iter().next()),
-        to: addresses(msg.to()),
-        cc: addresses(msg.cc()),
-        reply_to: addresses(msg.reply_to()),
-        subject: msg.subject().map(str::to_owned),
-        date_ms: msg
-            .date()
-            .map(|d| d.to_timestamp())
-            .filter(|&s| s > 0)
-            .and_then(|s| s.checked_mul(1000)),
         text,
         html,
-        attachments: Vec::new(),
-        auth_results: msg
-            .headers()
-            .iter()
-            .filter(|h| h.name().eq_ignore_ascii_case("authentication-results"))
-            .filter_map(|h| h.value().as_text().map(parse_auth_results))
-            .collect(),
-        has_encoding_problem: false,
+        ..headers_of(&msg)
     };
     // O mail-parser não marca UTF-8 inválido; o caractere de substituição denuncia.
     parsed.has_encoding_problem = msg.parts.iter().any(|p| p.is_encoding_problem)
@@ -308,6 +355,27 @@ fn parse_auth_results(value: &str) -> AuthResultsHeader {
     out
 }
 
+/// `pass (comentário) receiver=mx.cloudflare.net; client-ip=...; envelope-from=...`
+fn parse_received_spf(value: &str) -> ReceivedSpf {
+    let verdict = value
+        .split(|c: char| c.is_whitespace() || c == '(' || c == ';')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let receiver = value
+        .split(';')
+        .flat_map(|p| p.split_whitespace())
+        .find_map(|tok| {
+            tok.split_once('=')
+                .filter(|(k, _)| k.eq_ignore_ascii_case("receiver"))
+                .map(|(_, v)| {
+                    v.trim_matches(|c| c == '"' || c == ';')
+                        .to_ascii_lowercase()
+                })
+        });
+    ReceivedSpf { receiver, verdict }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,6 +397,29 @@ mod tests {
         let a = parse_auth_results("mx.example; none");
         assert_eq!(a.authserv_id, "mx.example");
         assert_eq!((a.spf, a.dkim, a.dmarc), (None, None, None));
+    }
+
+    #[test]
+    fn received_spf() {
+        let r = parse_received_spf(
+            "pass (mx.cloudflare.net: domain of a@gmail.com designates 2607:: as permitted sender) \
+             receiver=mx.cloudflare.net; client-ip=2607::; envelope-from=\"a@gmail.com\"; helo=x;",
+        );
+        assert_eq!(r.verdict, "pass");
+        assert_eq!(r.receiver.as_deref(), Some("mx.cloudflare.net"));
+        let r = parse_received_spf("SoftFail");
+        assert_eq!((r.verdict.as_str(), r.receiver), ("softfail", None));
+    }
+
+    #[test]
+    fn so_headers() {
+        let raw = b"Message-ID: <a@b>\r\nSubject: oi\r\nReceived-SPF: fail receiver=mx.cloudflare.net\r\n\
+                    Content-Type: text/plain\r\n\r\ncorpo grande que nao deve ser lido";
+        let p = parse_headers(raw).unwrap();
+        assert_eq!(p.message_id.as_deref(), Some("a@b"));
+        assert_eq!(p.subject.as_deref(), Some("oi"));
+        assert_eq!(p.received_spf[0].verdict, "fail");
+        assert_eq!((p.text, p.html, p.attachments.len()), (None, None, 0));
     }
 
     #[test]

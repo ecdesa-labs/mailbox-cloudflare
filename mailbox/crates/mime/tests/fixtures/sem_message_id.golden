@@ -9,6 +9,7 @@ subject: Some("Alerta sem Message-ID e sem Date")
 date_ms: None
 has_encoding_problem: false
 auth_results:
+received_spf:
 attachments:
 --- text
 Mensagem minima, sem MIME-Version.

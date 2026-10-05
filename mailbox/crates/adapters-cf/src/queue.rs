@@ -51,4 +51,15 @@ impl IngestQueue for QueueIngest<'_> {
             .await
             .map_err(|e| PortError(format!("queue send {}: {e}", job.raw_key)))
     }
+
+    async fn enqueue_batch(&self, jobs: &[IngestJob]) -> Result<(), PortError> {
+        if jobs.is_empty() {
+            return Ok(());
+        }
+        let wire: Vec<WireIngestJob> = jobs.iter().map(WireIngestJob::from).collect();
+        self.queue
+            .send_batch(wire)
+            .await
+            .map_err(|e| PortError(format!("queue sendBatch ({} jobs): {e}", jobs.len())))
+    }
 }
