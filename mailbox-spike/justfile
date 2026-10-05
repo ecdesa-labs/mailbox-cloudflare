@@ -1,0 +1,50 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+default:
+    @just --list
+
+# Pré-requisitos do sistema (Debian/Kali): sudo apt install -y pkg-config libssl-dev
+setup:
+    rustup target add wasm32-unknown-unknown
+    cargo install worker-build --locked
+
+fmt:
+    cargo fmt --all
+
+lint:
+    cargo fmt --all -- --check
+    cargo clippy -p mailbox-domain -p mailbox-application -p mailbox-mime --all-targets -- -D warnings
+    cargo clippy --target wasm32-unknown-unknown -p mailbox-adapters-cf -p mailbox-worker -- -D warnings
+
+# Testes nativos: só os crates puros (docs seção 11)
+test:
+    cargo test -p mailbox-domain -p mailbox-application -p mailbox-mime
+
+check-wasm:
+    cargo check --target wasm32-unknown-unknown -p mailbox-adapters-cf -p mailbox-worker
+
+# Regra de dependência (seção 4.1): domain/application/mime não podem puxar `worker`.
+check-deps:
+    ! cargo tree -p mailbox-domain -p mailbox-application -p mailbox-mime -e normal --prefix none | grep -E '^(worker|worker-sys|wasm-bindgen|js-sys|web-sys) '
+
+# Build completo do Worker (pega o tipo de falha do wasm-bindgen que `check` sozinho não pega)
+build:
+    cd worker && worker-build --release
+
+ci: lint test check-deps check-wasm build
+
+dev:
+    npx wrangler dev
+
+db-local:
+    npx wrangler d1 migrations apply mailbox --local
+
+# Cria os recursos remotos uma vez. Depois cole o database_id no wrangler.toml.
+remote-bootstrap:
+    npx wrangler r2 bucket create mailbox
+    npx wrangler d1 create mailbox
+    npx wrangler queues create mail-ingest
+    npx wrangler queues create mail-ingest-dlq
+
+deploy: ci
+    npx wrangler deploy

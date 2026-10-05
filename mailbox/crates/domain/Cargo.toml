@@ -1,0 +1,10 @@
+[package]
+name = "mailbox-domain"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Sem `std`: o `Ulid::new()` do crate usa SystemTime, que entra em pânico em
+# wasm32. Gerar ID é papel da porta IdGenerator (relógio + aleatório de fora).
+ulid = { version = "3", default-features = false }

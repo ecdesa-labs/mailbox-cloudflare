@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/domain",
+  "crates/application",
+  "crates/mime",
+  "crates/adapters-cf",
+  "worker",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace.dependencies]
+worker = { version = "0.8", features = ["queue", "d1"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+mailbox-domain = { path = "crates/domain" }
+mailbox-application = { path = "crates/application" }
+mailbox-adapters-cf = { path = "crates/adapters-cf" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+# NÃO adicionar `strip = true`: remove a seção target_features do .wasm e o
+# wasm-bindgen falha com "externref table required for catch wrappers".

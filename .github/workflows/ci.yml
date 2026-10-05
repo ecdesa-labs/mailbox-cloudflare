@@ -1,0 +1,24 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  mailbox:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mailbox
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mailbox
+      - uses: taiki-e/install-action@just
+      - run: cargo install worker-build --locked
+      - run: just ci

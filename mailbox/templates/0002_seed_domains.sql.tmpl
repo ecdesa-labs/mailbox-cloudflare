@@ -1,0 +1,6 @@
+-- Domínios da instância (docs seção 2). O handler `email` rejeita domínio fora desta tabela.
+-- IDs fixos para serem iguais em local e remoto.
+-- Depois que esta migração for aplicada, domínio novo entra numa migração própria.
+
+INSERT INTO domains (id, name, label, color) VALUES
+$rows;

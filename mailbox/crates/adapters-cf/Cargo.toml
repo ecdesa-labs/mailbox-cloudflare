@@ -1,0 +1,10 @@
+[package]
+name = "mailbox-adapters-cf"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+mailbox-domain.workspace = true
+mailbox-application.workspace = true
+worker.workspace = true

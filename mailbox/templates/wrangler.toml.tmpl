@@ -1,0 +1,39 @@
+name = "$worker"
+main = "worker/build/worker/shim.mjs"
+compatibility_date = "2026-10-01"
+
+[build]
+command = "cd worker && worker-build --release"
+watch_dir = ["worker/src", "crates"]
+
+# Front estático. /api/* sempre passa pelo Worker; o resto cai no SPA.
+[assets]
+directory = "web/out"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[r2_buckets]]
+binding = "MAIL"
+bucket_name = "$bucket"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "$database"
+# Local aceita um placeholder. Para deploy: `just remote-bootstrap` e depois
+# `python3 scripts/setup_instance.py --database-id <id que o wrangler imprimiu>` (na raiz).
+database_id = "$database_id"
+migrations_dir = "migrations"
+
+[[queues.producers]]
+queue = "$queue"
+binding = "INGEST"
+
+[[queues.consumers]]
+queue = "$queue"
+max_batch_size = 5
+max_retries = 3
+dead_letter_queue = "$dlq"
+
+[observability]
+enabled = true

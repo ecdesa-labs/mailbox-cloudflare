@@ -1,0 +1,20 @@
+name = "mailbox-spike"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-10-01"
+
+[build]
+command = "worker-build --release"
+
+[[r2_buckets]]
+binding = "MAIL"
+bucket_name = "mailbox-spike"
+
+[[queues.producers]]
+queue = "mail-ingest"
+binding = "INGEST"
+
+[[queues.consumers]]
+queue = "mail-ingest"
+max_batch_size = 5
+max_retries = 3
+dead_letter_queue = "mail-ingest-dlq"
