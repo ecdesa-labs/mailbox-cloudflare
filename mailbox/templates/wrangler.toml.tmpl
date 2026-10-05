@@ -35,5 +35,9 @@ max_batch_size = 5
 max_retries = 3
 dead_letter_queue = "$dlq"
 
+# Domínios atendidos pelo handler de email (o resto é rejeitado).
+[vars]
+MAILBOX_DOMAINS = "$domains"
+
 [observability]
 enabled = true

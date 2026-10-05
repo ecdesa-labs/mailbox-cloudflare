@@ -4,9 +4,9 @@ Caixa de email pessoal que roda inteira na Cloudflare: recebe, guarda, indexa e
 (em breve) responde emails de um ou mais domínios seus, sem servidor de email
 próprio e sem provedor pago de caixa postal.
 
-> **Estado:** em desenvolvimento. Hoje o projeto já cria toda a infraestrutura,
-> aplica o schema do banco e publica o Worker. Receber emails de verdade entra
-> na Fase 3 (veja [Roadmap](#roadmap)).
+> **Estado:** em desenvolvimento. O projeto já recebe emails de verdade e os
+> guarda no R2; processar, indexar e ler entram nas próximas fases (veja
+> [Roadmap](#roadmap)).
 
 ## Proposta
 
@@ -90,6 +90,21 @@ O `just up` faz, em ordem:
 Rodar de novo é seguro: nada é recriado. Sem argumentos, `just up` usa a
 instância já configurada.
 
+### Receber emails
+
+Depois do deploy, ligue o Email Routing e valide com um endereço antes de
+mandar o domínio inteiro para o Worker:
+
+```bash
+just email-enable                       # troca os MX do domínio
+just email-route teste@exemplo.com.br   # só este endereço vai para o Worker
+just email-catchall                     # depois de validar: todos os endereços
+```
+
+Se o domínio tiver um **Null MX** (`MX 0 .`) ou SPF `v=spf1 -all` (configuração
+de "domínio sem email"), o `email-enable` é recusado: remova o Null MX e troque
+o SPF por `v=spf1 include:_spf.mx.cloudflare.net ~all` no painel antes.
+
 ### Vários domínios
 
 `--label` e `--color` seguem a ordem dos `--domain`:
@@ -126,6 +141,10 @@ Todas as opções: `just configure --help`.
 | `just migrate-local` / `just migrate-remote` | Migrações do D1 |
 | `just deploy` | CI + migração remota + publicação + teste de fumaça |
 | `just dev` | Sobe local com `wrangler dev` (D1, R2 e filas simulados) |
+| `just email-enable` | Liga o Email Routing nos domínios da instância (substitui os MX) |
+| `just email-route <endereço>` | Manda um endereço específico para o Worker |
+| `just email-catchall` | Manda todos os endereços dos domínios para o Worker |
+| `just email-status` | Estado do Email Routing e das regras |
 
 ## A instância
 
@@ -187,7 +206,7 @@ e por isso são testados nativamente, sem Cloudflare.
 | 0 | Scaffold: workspace, wrangler, CI | ✅ |
 | 1 | Domínio, migrações, value objects; configuração da instância | ✅ |
 | 2 | Crate `mime`: parsing, sanitização, `cid:` e imagens remotas | ✅ |
-| 3 | Handler `email`: receber de verdade | |
+| 3 | Handler `email`: receber de verdade | ✅ |
 | 4 | Handler `queue`: processar, idempotente, DLQ | |
 | 5 | API de leitura com paginação por cursor | |
 | 6 | Autenticação com Cloudflare Access | |

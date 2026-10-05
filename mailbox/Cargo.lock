@@ -410,8 +410,13 @@ dependencies = [
 name = "mailbox-adapters-cf"
 version = "0.0.0"
 dependencies = [
+ "js-sys",
  "mailbox-application",
  "mailbox-domain",
+ "serde",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "worker",
 ]
 
@@ -444,6 +449,7 @@ version = "0.0.0"
 dependencies = [
  "mailbox-adapters-cf",
  "mailbox-application",
+ "mailbox-domain",
  "serde_json",
  "worker",
 ]

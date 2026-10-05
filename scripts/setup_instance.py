@@ -175,7 +175,8 @@ def render(root: Path, cfg: dict) -> dict[Path, str]:
     tmpl = root / "templates"
 
     wrangler = Template((tmpl / "wrangler.toml.tmpl").read_text(encoding="utf-8")).substitute(
-        {k: cfg[k] for k in (*RESOURCE_KEYS, "database_id")}
+        {k: cfg[k] for k in (*RESOURCE_KEYS, "database_id")},
+        domains=",".join(d["name"] for d in cfg["domains"]),
     )
 
     rows = ",\n".join(
@@ -186,7 +187,7 @@ def render(root: Path, cfg: dict) -> dict[Path, str]:
 
     env = "".join(
         f"MAILBOX_{k.upper()}={cfg[k]}\n" for k in (*RESOURCE_KEYS, "database_id")
-    )
+    ) + "MAILBOX_DOMAINS=" + ",".join(d["name"] for d in cfg["domains"]) + "\n"
 
     return {
         root / "wrangler.toml": f"# {GENERATED.format(src='templates/wrangler.toml.tmpl')}\n" + wrangler,

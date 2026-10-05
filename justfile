@@ -125,6 +125,42 @@ deploy: _require-db-id ci migrate-remote
     done
     echo "deploy feito, mas $url/api/ping não respondeu pong em 2 min." >&2; exit 1
 
+# Liga o Email Routing nos domínios da instância. ATENÇÃO: substitui os registros MX.
+email-enable:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ env }}
+    cd "{{ mailbox }}"
+    for d in ${MAILBOX_DOMAINS//,/ }; do npx wrangler email routing enable "$d"; done
+
+# Manda um endereço específico para o Worker (validar antes do catch-all)
+email-route ADDRESS:
+    {{ env }} && cd "{{ mailbox }}" && npx wrangler email routing rules create "${1#*@}" \
+        --name "mailbox: $1" --match-type literal --match-field to --match-value "$1" \
+        --action-type worker --action-value "$MAILBOX_WORKER"
+
+# Manda todo endereço dos domínios da instância para o Worker
+email-catchall:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ env }}
+    cd "{{ mailbox }}"
+    for d in ${MAILBOX_DOMAINS//,/ }; do
+        npx wrangler email routing rules update "$d" catch-all --name "mailbox: catch-all" \
+            --action-type worker --action-value "$MAILBOX_WORKER"
+    done
+
+# Estado do Email Routing e das regras
+email-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ env }}
+    cd "{{ mailbox }}"
+    for d in ${MAILBOX_DOMAINS//,/ }; do
+        npx wrangler email routing settings "$d"
+        npx wrangler email routing rules list "$d"
+    done
+
 # Sobe local com wrangler dev
 dev:
     cd "{{ mailbox }}" && just dev

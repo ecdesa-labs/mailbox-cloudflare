@@ -46,6 +46,7 @@ class InstanciaNova(unittest.TestCase):
         self.assertIn(f"('{d['id']}', 'exemplo.com.br', 'Exemplo', '#2563EB');", seed)
         self.assertIn('bucket_name = "mailbox"', (self.root / "wrangler.toml").read_text())
         self.assertIn("MAILBOX_DATABASE=mailbox\n", (self.root / "instance.env").read_text())
+        self.assertIn("MAILBOX_DOMAINS=exemplo.com.br\n", (self.root / "instance.env").read_text())
         self.assertEqual(run(self.root, "--check")[0], 0)
 
     def test_varios_dominios_e_recursos(self):
@@ -60,6 +61,7 @@ class InstanciaNova(unittest.TestCase):
         wrangler = (self.root / "wrangler.toml").read_text()
         self.assertIn('name = "caixa"', wrangler)
         self.assertIn('dead_letter_queue = "caixa-dlq"', wrangler)
+        self.assertIn('MAILBOX_DOMAINS = "a.com,b.dev"', wrangler)
 
     def test_rodar_de_novo_preserva_id_e_atualiza_so_o_pedido(self):
         run(self.root, "--domain", "a.com", "--label", "A", "--color", "#111")
