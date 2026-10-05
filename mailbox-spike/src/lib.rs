@@ -4,7 +4,19 @@
 
 use mail_parser::MessageParser;
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
 use worker::*;
+
+// `FixedLengthStream` do runtime (TransformStream com tamanho declarado).
+// O R2 só aceita stream com tamanho conhecido; o do email não tem.
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = web_sys::TransformStream, js_name = FixedLengthStream)]
+    type JsFixedLengthStream;
+    #[wasm_bindgen(constructor, js_class = "FixedLengthStream")]
+    fn new(length: f64) -> JsFixedLengthStream;
+}
 
 const KNOWN_DOMAINS: &[&str] = &["acmeco.com.br", "pessoal.dev"];
 
@@ -81,14 +93,21 @@ async fn email(message: ForwardableEmailMessage, env: Env, _ctx: Context) -> Res
     let id = new_id();
     let raw_key = format!("{domain}/raw/{id}.eml");
 
-    // Spike: buffer completo. Em Fase 3 avaliar streaming (R2 exige tamanho
-    // conhecido; `raw_size()` permite usar um stream de tamanho fixo).
-    let bytes = message.raw_bytes().await?;
-    let size = bytes.len();
-
+    // Item 7: `stream@` grava por stream (os bytes não entram no wasm);
+    // qualquer outro endereço usa o buffer completo, como antes.
     // Se qualquer `?` abaixo falhar, o handler devolve Err. Verificar no
     // ambiente real se isso vira erro temporário (4xx) para o remetente.
-    env.bucket("MAIL")?.put(&raw_key, bytes).execute().await?;
+    let size = message.raw_size() as usize;
+    let bucket = env.bucket("MAIL")?;
+    if envelope_to.starts_with("stream@") {
+        let fls = JsFixedLengthStream::new(size as f64);
+        let pipe = message.raw().pipe_to(&fls.writable());
+        bucket.put(&raw_key, fls.readable()).execute().await?;
+        JsFuture::from(pipe).await?;
+    } else {
+        let bytes = message.raw_bytes().await?;
+        bucket.put(&raw_key, bytes).execute().await?;
+    }
 
     let job = IngestJob {
         raw_key: raw_key.clone(),

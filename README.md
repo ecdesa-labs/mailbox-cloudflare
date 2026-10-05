@@ -215,6 +215,11 @@ O front (Next.js estático) é desenvolvido em paralelo.
 ## Limitações conhecidas
 
 - Email Routing aceita mensagens de até 25 MiB.
+- No plano Free, cada invocação tem 10 ms de CPU. Receber e gravar não
+  depende do tamanho (o `.eml` vai por stream para o R2). Emails acima de um
+  limiar são processados em **modo leve**: aparecem na caixa com remetente,
+  assunto e data, e o `.eml` fica para download, mas sem corpo nem anexos
+  indexados.
 - No plano Free, mensagens da fila e da DLQ expiram em 24 h; o reprocessamento
   sempre parte do `.eml` no R2.
 - `wrangler d1 export` não exporta tabelas virtuais (a busca FTS5). Para

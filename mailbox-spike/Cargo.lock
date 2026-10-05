@@ -414,6 +414,9 @@ dependencies = [
  "mail-parser",
  "serde",
  "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "worker",
 ]
 
