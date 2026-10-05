@@ -10,12 +10,11 @@ use mailbox_domain::DomainName;
 use serde_json::json;
 use worker::*;
 
+mod api;
+
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
-    Router::new()
-        .get("/api/ping", |_, _| Response::ok("pong"))
-        .run(req, env)
-        .await
+    api::router().run(req, env).await
 }
 
 /// Exportação `email` escrita à mão, sem `#[event(email)]`: no workers-rs

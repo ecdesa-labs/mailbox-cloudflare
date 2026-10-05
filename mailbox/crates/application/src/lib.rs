@@ -3,6 +3,7 @@
 pub mod ingest;
 pub mod ports;
 pub mod process;
+pub mod read;
 pub mod reconcile;
 
 pub use ingest::{Envelope, IngestEmail, IngestOutcome};
@@ -13,5 +14,10 @@ pub use ports::{
 };
 pub use process::{
     handle_job, Delivery, ProcessError, ProcessMessage, ProcessOutcome, TRUSTED_AUTHSERV_ID,
+};
+pub use read::{
+    content_disposition, is_inline_safe, list_page, AttachmentMeta, Cursor, DomainSummary,
+    IdentitySummary, ListItem, ListQuery, MessageDetail, Page, Person, QueryError, ReadModel,
+    ThreadView,
 };
 pub use reconcile::{Reconcile, ReconcileReport};

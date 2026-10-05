@@ -452,6 +452,7 @@ dependencies = [
  "mailbox-adapters-cf",
  "mailbox-application",
  "mailbox-domain",
+ "mailbox-mime",
  "serde_json",
  "worker",
 ]

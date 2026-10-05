@@ -11,5 +11,6 @@ crate-type = ["cdylib"]
 mailbox-domain.workspace = true
 mailbox-application.workspace = true
 mailbox-adapters-cf.workspace = true
+mailbox-mime = { path = "../crates/mime" }
 worker.workspace = true
 serde_json.workspace = true

@@ -3,6 +3,7 @@
 #![cfg(target_arch = "wasm32")]
 
 mod d1;
+mod d1_read;
 mod queue;
 mod r2;
 mod runtime;

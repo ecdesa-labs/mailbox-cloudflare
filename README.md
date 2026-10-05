@@ -4,9 +4,9 @@ Caixa de email pessoal que roda inteira na Cloudflare: recebe, guarda, indexa e
 (em breve) responde emails de um ou mais domínios seus, sem servidor de email
 próprio e sem provedor pago de caixa postal.
 
-> **Estado:** em desenvolvimento. O projeto já recebe emails de verdade e os
-> guarda no R2; processar, indexar e ler entram nas próximas fases (veja
-> [Roadmap](#roadmap)).
+> **Estado:** em desenvolvimento. O projeto já recebe, processa e indexa
+> emails de verdade (R2 + D1, com threads e busca); a API de leitura e o
+> front entram nas próximas fases (veja [Roadmap](#roadmap)).
 
 ## Proposta
 
@@ -141,6 +141,7 @@ Todas as opções: `just configure --help`.
 | `just migrate-local` / `just migrate-remote` | Migrações do D1 |
 | `just deploy` | CI + migração remota + publicação + teste de fumaça |
 | `just dev` | Sobe local com `wrangler dev` (D1, R2 e filas simulados) |
+| `just contract` | Testes de contrato da API com Worker, D1, R2 e filas locais |
 | `just email-enable` | Liga o Email Routing nos domínios da instância (substitui os MX) |
 | `just email-route <endereço>` | Manda um endereço específico para o Worker |
 | `just email-catchall` | Manda todos os endereços dos domínios para o Worker |
@@ -209,8 +210,8 @@ e por isso são testados nativamente, sem Cloudflare.
 | 1 | Domínio, migrações, value objects; configuração da instância | ✅ |
 | 2 | Crate `mime`: parsing, sanitização, `cid:` e imagens remotas | ✅ |
 | 3 | Handler `email`: receber de verdade | ✅ |
-| 4 | Handler `queue`: processar, idempotente, DLQ | |
-| 5 | API de leitura com paginação por cursor | |
+| 4 | Handler `queue`: processar, idempotente, DLQ, modo leve, reconciliação | ✅ |
+| 5 | API de leitura com paginação por cursor | ✅ (local; vai para produção com a Fase 6) |
 | 6 | Autenticação com Cloudflare Access | |
 | 7 | Busca, flags, pastas, ações em lote, regras de roteamento | |
 | 8 | Responder e enviar (Email Sending) | |

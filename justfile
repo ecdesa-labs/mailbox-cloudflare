@@ -184,9 +184,18 @@ reprocess MODE KEY="":
 
 # Falhas de processamento e pedidos de reprocessamento pendentes
 failures:
-    {{ env }} && cd "{{ mailbox }}" && npx wrangler d1 execute "$MAILBOX_DATABASE" --remote --command \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ env }}
+    cd "{{ mailbox }}"
+    npx wrangler d1 execute "$MAILBOX_DATABASE" --remote --json --command \
         "SELECT raw_key, attempts, last_error, gave_up_at IS NOT NULL AS desistiu FROM ingest_failures ORDER BY updated_at DESC LIMIT 50; \
-         SELECT id, mode, raw_key, enqueued FROM reprocess_requests WHERE done_at IS NULL"
+         SELECT id, mode, raw_key, enqueued FROM reprocess_requests WHERE done_at IS NULL" 2>/dev/null \
+    | python3 -c 'import json,sys; [print(t, *r["results"] or ["(nada)"], sep="\n  ") for t, r in zip(["Falhas:", "Pedidos pendentes:"], json.load(sys.stdin))]' 
+
+# Testes de contrato da API com Worker, D1, R2 e filas locais (estado isolado)
+contract: (ci)
+    python3 scripts/contract_test.py
 
 # Sobe local com wrangler dev
 dev:
