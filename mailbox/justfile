@@ -1,7 +1,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 # Nomes dos recursos da instância. Gerado por scripts/setup_instance.py.
 set dotenv-filename := "instance.env"
-set dotenv-required
+set dotenv-load
 
 default:
     @just --list

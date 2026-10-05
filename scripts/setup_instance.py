@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Configura a instância do mailbox: domínios e nomes dos recursos na Cloudflare.
 
-`mailbox/instance.json` é a fonte da verdade da instância. Este script atualiza
+`mailbox/instance.json` é a fonte da verdade da instância (fora do git: tem IDs
+da sua conta). O modelo versionado é `mailbox/instance.example.json`. Este script atualiza
 o `instance.json` com os args e gera, a partir de `mailbox/templates/`, estes
 arquivos dentro de `mailbox/`:
 
@@ -148,6 +149,7 @@ def load(root: Path) -> dict:
     if not path.exists():
         return {**DEFAULTS, "domains": []}
     return {**DEFAULTS, **json.loads(path.read_text(encoding="utf-8"))}
+
 
 
 def apply_args(cfg: dict, args: argparse.Namespace) -> dict:

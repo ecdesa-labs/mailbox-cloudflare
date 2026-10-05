@@ -21,4 +21,6 @@ jobs:
           workspaces: mailbox
       - uses: taiki-e/install-action@just
       - run: cargo install worker-build --locked
+      # instance.json e os arquivos gerados ficam fora do git (dados da conta).
+      - run: cp instance.example.json instance.json && python3 ../scripts/setup_instance.py
       - run: just ci

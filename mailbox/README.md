@@ -1,6 +1,6 @@
 # mailbox
 
-Componente principal: o Worker em Rust. Visão geral e uso no [README da raiz](../README.md); contexto e decisões em docs/CONTEXTO.md e docs/PLAN.md.
+Componente principal: o Worker em Rust. Visão geral e uso no [README da raiz](../README.md).
 
     sudo apt install -y pkg-config libssl-dev   # uma vez
     just setup                                   # uma vez
@@ -9,7 +9,8 @@ Componente principal: o Worker em Rust. Visão geral e uso no [README da raiz](.
 
 ## Instância
 
-Domínios e nomes dos recursos na Cloudflare ficam em `instance.json`.
+Domínios e nomes dos recursos na Cloudflare ficam em `instance.json` (fora do
+git; modelo em `instance.example.json`).
 `wrangler.toml`, `migrations/0002_seed_domains.sql` e `instance.env` são
 gerados a partir dele e de `templates/`; não edite esses três à mão.
 O script fica na raiz do repositório:

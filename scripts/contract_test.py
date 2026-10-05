@@ -28,6 +28,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MAILBOX = ROOT / "mailbox"
 FIXTURES = MAILBOX / "crates/mime/tests/fixtures"
+# Domínio da instância local (o handler de email só aceita os dela).
+_instance = MAILBOX / "instance.json"
+DOMAIN = json.loads((_instance if _instance.exists() else MAILBOX / "instance.example.json").read_text())["domains"][0]["name"]
 
 ITEM_KEYS = {
     "id", "thread_id", "domain", "identity", "from", "subject", "snippet", "received_at",
@@ -40,22 +43,22 @@ DETAIL_KEYS = ITEM_KEYS | {
 
 REPLY = (
     b"Message-ID: <resp.1@cliente.com.br>\r\nIn-Reply-To: <CAF+texto.001@cliente.com.br>\r\n"
-    b"From: Joao <joao@cliente.com.br>\r\nTo: contato@acmeco.com.br\r\nSubject: Re: Orcamento\r\n\r\nPode ser.\r\n"
+    b"From: Joao <joao@cliente.com.br>\r\nTo: contato@exemplo.com.br\r\nSubject: Re: Orcamento\r\n\r\nPode ser.\r\n"
 )
 
 # (arquivo ou bytes, envelope_to)
 EMAILS = [
-    ("texto_puro.eml", "contato@acmeco.com.br"),
-    ("multipart_alternative.eml", "dev@acmeco.com.br"),
-    ("imagem_inline.eml", "marketing@acmeco.com.br"),
-    ("rfc822_aninhado.eml", "contato@acmeco.com.br"),
+    ("texto_puro.eml", f"contato@{DOMAIN}"),
+    ("multipart_alternative.eml", f"dev@{DOMAIN}"),
+    ("imagem_inline.eml", f"marketing@{DOMAIN}"),
+    ("rfc822_aninhado.eml", f"contato@{DOMAIN}"),
     # charset_quebrado.eml fica de fora: o simulador local recusa charset
     # desconhecido antes do Worker. Coberto pelos goldens do `mime`.
-    (REPLY, "contato@acmeco.com.br"),
+    (REPLY, f"contato@{DOMAIN}"),
 ]
 
 AUD = "c0ffee" * 8
-OWNER = "dono@acmeco.com.br"
+OWNER = f"dono@{DOMAIN}"
 
 failures: list[str] = []
 
@@ -256,7 +259,7 @@ def verify(api: Api, raws: dict[str, bytes]) -> None:
     check(seen == [i["id"] for i in items], f"limit=2 percorre tudo em {pages} páginas, sem repetir nem pular")
 
     print("filtros e erros")
-    check(api.json("/api/messages?domain=acmeco.com.br")[1]["items"] == items[:50], "filtro por domínio")
+    check(api.json(f"/api/messages?domain={DOMAIN}")[1]["items"] == items[:50], "filtro por domínio")
     check(api.json("/api/messages?folder=archive")[1]["items"] == [], "pasta vazia")
     for path, code, status in [
         ("/api/messages?folder=rascunho", "bad_request", 400),
@@ -275,10 +278,10 @@ def verify(api: Api, raws: dict[str, bytes]) -> None:
     print("GET /api/domains")
     status, doms = api.json("/api/domains")
     d = doms["items"][0] if doms.get("items") else {}
-    check(status == 200 and len(doms["items"]) == 1 and d["name"] == "acmeco.com.br", "um domínio: acmeco.com.br")
+    check(status == 200 and len(doms["items"]) == 1 and d["name"] == f"{DOMAIN}", f"um domínio: {DOMAIN}")
     check(d.get("unread") == len(EMAILS), "não lidos = mensagens novas")
     addrs = {i["address"] for i in d.get("identities", [])}
-    check(addrs == {"contato@acmeco.com.br", "dev@acmeco.com.br", "marketing@acmeco.com.br"}, "identidades criadas")
+    check(addrs == {f"contato@{DOMAIN}", f"dev@{DOMAIN}", f"marketing@{DOMAIN}"}, "identidades criadas")
 
     print("GET /api/messages/:id (imagem inline)")
     nl = by_subject["Newsletter com logo"]
@@ -286,7 +289,7 @@ def verify(api: Api, raws: dict[str, bytes]) -> None:
     check(status == 200 and set(m) == DETAIL_KEYS, "detalhe com os campos do contrato")
     att = m["attachments"][0] if m["attachments"] else {}
     check(att.get("url") and f'src="{att["url"]}"' in (m["html"] or ""), "cid: virou a URL do anexo no HTML")
-    check(m["has_remote_images"] is False and m["identity"] == "marketing@acmeco.com.br", "sem imagens remotas")
+    check(m["has_remote_images"] is False and m["identity"] == f"marketing@{DOMAIN}", "sem imagens remotas")
 
     print("GET /api/attachments/:id")
     s, h, body = api.request(att["url"])

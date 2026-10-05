@@ -1,0 +1,19 @@
+{
+  "worker": "mailbox",
+  "bucket": "mailbox",
+  "database": "mailbox",
+  "database_id": "00000000-0000-0000-0000-000000000000",
+  "queue": "mail-ingest",
+  "dlq": "mail-ingest-dlq",
+  "access_team": "",
+  "access_aud": "",
+  "allowed_emails": [],
+  "domains": [
+    {
+      "id": "01M44NRD000000000000000001",
+      "name": "exemplo.com.br",
+      "label": "Exemplo",
+      "color": "#2563EB"
+    }
+  ]
+}

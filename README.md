@@ -172,22 +172,29 @@ Todas as opções: `just configure --help`.
 
 ## A instância
 
-Tudo o que muda de uma pessoa para outra fica em
-[`mailbox/instance.json`](mailbox/instance.json):
+Tudo o que muda de uma pessoa para outra fica em `mailbox/instance.json`,
+que **não vai para o git**: tem o id do seu D1, o time e a aplicação do Access e
+os seus domínios. O modelo versionado é
+[`mailbox/instance.example.json`](mailbox/instance.example.json):
 
 ```json
 {
   "worker": "mailbox",
   "bucket": "mailbox",
   "database": "mailbox",
-  "database_id": "…",
+  "database_id": "00000000-0000-0000-0000-000000000000",
   "queue": "mail-ingest",
   "dlq": "mail-ingest-dlq",
+  "access_team": "",
+  "access_aud": "",
+  "allowed_emails": [],
   "domains": [
     { "id": "01M…", "name": "exemplo.com.br", "label": "Exemplo", "color": "#2563EB" }
   ]
 }
 ```
+
+Não precisa copiar à mão: o primeiro `just configure --domain ...` cria o seu.
 
 O [`scripts/setup_instance.py`](scripts/setup_instance.py) atualiza esse arquivo
 e gera, a partir de [`mailbox/templates/`](mailbox/templates):
@@ -196,8 +203,10 @@ e gera, a partir de [`mailbox/templates/`](mailbox/templates):
 - `mailbox/migrations/0002_seed_domains.sql`
 - `mailbox/instance.env` (lido pelos `justfile`s)
 
-Não edite esses três à mão: o `just ci` falha se eles divergirem do
-`instance.json`. Para mudar algo no `wrangler.toml`, edite o template.
+Os três também ficam fora do git. Não edite à mão: o `just ci` falha se eles
+divergirem do `instance.json`. Para mudar algo no `wrangler.toml`, edite o
+template. Nenhum deles guarda segredo (token de API fica no login do
+wrangler, fora do projeto), mas identificam a sua conta.
 
 ## Estrutura do repositório
 
@@ -215,7 +224,8 @@ mailbox-cloudflare/
     migrations/         SQL do D1
     templates/          base dos arquivos gerados pela instância
     web/                front estático
-    docs/PLAN.md        log de decisões
+    instance.example.json  modelo da instância (o seu instance.json fica fora do git)
+    docs/               notas locais (fora do git)
   mailbox-spike/        prova de conceito que validou a plataforma
 ```
 

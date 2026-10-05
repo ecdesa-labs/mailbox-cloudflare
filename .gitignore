@@ -3,3 +3,13 @@ node_modules/
 .wrangler/
 .dev.vars
 __pycache__/
+
+# Instância: dados da conta (IDs, Access) e domínios. Gerados por
+# scripts/setup_instance.py; o modelo versionado é mailbox/instance.example.json.
+mailbox/instance.json
+mailbox/instance.env
+mailbox/wrangler.toml
+mailbox/migrations/0002_seed_domains.sql
+mailbox/.dev.vars
+# Notas pessoais de contexto e log de decisões.
+mailbox/docs/
