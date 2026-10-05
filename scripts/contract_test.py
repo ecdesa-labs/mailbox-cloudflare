@@ -10,8 +10,11 @@ espera a fila processar e confere cada endpoint.
 
 from __future__ import annotations
 
+import base64
+import http.server
 import json
 import shutil
+import threading
 import socket
 import subprocess
 import sys
@@ -51,7 +54,54 @@ EMAILS = [
     (REPLY, "contato@acmeco.com.br"),
 ]
 
+AUD = "c0ffee" * 8
+OWNER = "dono@acmeco.com.br"
+
 failures: list[str] = []
+
+
+def b64u(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+class FakeAccess:
+    """Chave RSA real (openssl) + JWKS no formato do /cdn-cgi/access/certs."""
+
+    def __init__(self, workdir: Path) -> None:
+        self.key = workdir / "access.pem"
+        subprocess.run(["openssl", "genrsa", "-out", str(self.key), "2048"], check=True, capture_output=True)
+        mod = subprocess.run(["openssl", "rsa", "-in", str(self.key), "-noout", "-modulus"],
+                             check=True, capture_output=True, text=True).stdout  # fmt: skip
+        n = bytes.fromhex(mod.strip().split("=", 1)[1])
+        jwks = json.dumps({"keys": [{"kid": "k1", "kty": "RSA", "alg": "RS256", "n": b64u(n), "e": "AQAB"}]}).encode()
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                ok = self.path == "/cdn-cgi/access/certs"
+                self.send_response(200 if ok else 404)
+                self.send_header("content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(jwks if ok else b"{}")
+
+            def log_message(self, *a) -> None:
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.issuer = f"http://127.0.0.1:{self.server.server_port}"
+
+    def token(self, *, alg: str = "RS256", kid: str = "k1", sign: bool = True, **claims) -> str:
+        now = int(time.time())
+        body = {"iss": self.issuer, "aud": [AUD], "exp": now + 600, "nbf": now - 5, "type": "app", "email": OWNER}
+        body |= claims
+        head = b64u(json.dumps({"alg": alg, "kid": kid}).encode())
+        payload = b64u(json.dumps(body).encode())
+        signing_input = f"{head}.{payload}".encode()
+        sig = b""
+        if sign:
+            sig = subprocess.run(["openssl", "dgst", "-sha256", "-sign", str(self.key)],
+                                 input=signing_input, check=True, capture_output=True).stdout  # fmt: skip
+        return f"{head}.{payload}.{b64u(sig)}"
 
 
 def check(cond: bool, what: str) -> None:
@@ -61,11 +111,18 @@ def check(cond: bool, what: str) -> None:
 
 
 class Api:
-    def __init__(self, port: int) -> None:
+    def __init__(self, port: int, token: str | None = None) -> None:
         self.base = f"http://127.0.0.1:{port}"
+        self.token = token
+
+    def as_(self, token: str | None) -> "Api":
+        api = Api(0, token)
+        api.base = self.base
+        return api
 
     def request(self, path: str, data: bytes | None = None) -> tuple[int, dict[str, str], bytes]:
-        req = urllib.request.Request(self.base + path, data=data, method="POST" if data else "GET")
+        headers = {"Cf-Access-Jwt-Assertion": self.token} if self.token else {}
+        req = urllib.request.Request(self.base + path, data=data, method="POST" if data else "GET", headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 return r.status, {k.lower(): v for k, v in r.headers.items()}, r.read()
@@ -93,13 +150,16 @@ def main() -> int:
     log = open(state / "dev.log", "w")
     server = None
     try:
-        print("preparando D1 local e subindo o Worker...")
+        print("preparando D1 local, Access falso e subindo o Worker...")
+        access = FakeAccess(state)
         run(["npx", "wrangler", "d1", "migrations", "apply", "mailbox", "--local", "--persist-to", str(state)])
         server = subprocess.Popen(
-            ["npx", "wrangler", "dev", "--port", str(port), "--persist-to", str(state)],
+            ["npx", "wrangler", "dev", "--port", str(port), "--persist-to", str(state),
+             "--var", f"MAILBOX_ACCESS_TEAM:{access.issuer}", "--var", f"MAILBOX_ACCESS_AUD:{AUD}",
+             "--var", f"MAILBOX_ALLOWED_EMAILS:{OWNER}", "--var", "MAILBOX_AUTH_BYPASS:0"],
             cwd=MAILBOX, stdout=log, stderr=subprocess.STDOUT,
         )  # fmt: skip
-        api = Api(port)
+        api = Api(port, access.token())
         for _ in range(180):
             try:
                 if api.request("/api/ping")[0] == 200:
@@ -127,6 +187,7 @@ def main() -> int:
         else:
             raise SystemExit(f"a fila não processou tudo a tempo: {page}")
 
+        verify_auth(api, access)
         verify(api, raws)
     finally:
         if server:
@@ -143,6 +204,32 @@ def main() -> int:
 
     print(f"\n{'FALHOU: ' + str(len(failures)) if failures else 'tudo ok'}")
     return 1 if failures else 0
+
+
+def verify_auth(api: Api, access: FakeAccess) -> None:
+    print("autenticação (Access)")
+    check(api.as_(None).request("/api/ping")[0] == 200, "/api/ping é público")
+    s, me = api.json("/api/me")
+    check(s == 200 and me == {"email": OWNER}, "token válido -> 200 e /api/me com o email")
+    tampered = access.token()
+    head, payload, sig = tampered.split(".")
+    forged = b64u(json.dumps({"iss": access.issuer, "aud": [AUD], "exp": int(time.time()) + 600, "email": "intruso@x.com"}).encode())
+    bad = {
+        "sem token": None,
+        "lixo": "abc",
+        "expirado": access.token(exp=int(time.time()) - 3600),
+        "aud de outra aplicação": access.token(aud=["outra"]),
+        "iss de outro time": access.token(iss="https://outro.cloudflareaccess.com"),
+        "type org": access.token(type="org"),
+        "email fora da lista": access.token(email="intruso@x.com"),
+        "payload adulterado": f"{head}.{forged}.{sig}",
+        "alg none": access.token(alg="none", sign=False),
+        "kid desconhecido": access.token(kid="k9"),
+    }
+    for what, token in bad.items():
+        for path in ("/api/me", "/api/messages"):
+            s, body = api.as_(token).json(path)
+            check(s == 401 and body.get("error", {}).get("code") == "unauthorized", f"{what}: {path} -> 401")
 
 
 def verify(api: Api, raws: dict[str, bytes]) -> None:

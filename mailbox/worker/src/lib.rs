@@ -14,7 +14,18 @@ mod api;
 
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
-    api::router().run(req, env).await
+    // Só /api/* chega aqui (run_worker_first); o front estático é servido
+    // direto pelos Assets, atrás do Access na borda.
+    let path = req.path();
+    let identity = if path == "/api/ping" {
+        None
+    } else {
+        match api::authorize(&req, &env).await {
+            Ok(i) => Some(i),
+            Err(resp) => return Ok(resp),
+        }
+    };
+    api::router(identity).run(req, env).await
 }
 
 /// Exportação `email` escrita à mão, sem `#[event(email)]`: no workers-rs

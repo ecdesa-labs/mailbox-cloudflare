@@ -116,14 +116,20 @@ deploy: _require-db-id ci migrate-remote
     if [ -z "$url" ]; then
         echo "deploy feito, mas não achei a URL workers.dev na saída; pulei o teste de fumaça."; exit 0
     fi
-    # Subdomínio novo pode levar alguns minutos para ter certificado.
+    # Subdomínio novo pode levar alguns minutos para ter certificado. Com o
+    # Access na borda, a resposta é o redirecionamento para o login.
     for i in $(seq 1 12); do
-        if [ "$(curl -fsS "$url/api/ping" 2>/dev/null)" = "pong" ]; then
-            echo "ok: $url/api/ping respondeu pong"; exit 0
+        out=$(curl -sS -o /tmp/ping.$$ -w '%{http_code} %{redirect_url}' "$url/api/ping" 2>/dev/null || true)
+        body=$(cat /tmp/ping.$$ 2>/dev/null || true); rm -f /tmp/ping.$$
+        if [ "$body" = "pong" ]; then
+            echo "ok: $url/api/ping respondeu pong (sem Access na borda)"; exit 0
+        fi
+        if [[ "$out" =~ ^30[0-9]\ https://[a-z0-9-]+\.cloudflareaccess\.com/ ]]; then
+            echo "ok: $url está no ar, protegido pelo Access"; exit 0
         fi
         echo "aguardando $url ($i/12)..."; sleep 10
     done
-    echo "deploy feito, mas $url/api/ping não respondeu pong em 2 min." >&2; exit 1
+    echo "deploy feito, mas $url/api/ping não respondeu em 2 min." >&2; exit 1
 
 # Liga o Email Routing nos domínios da instância. ATENÇÃO: substitui os registros MX.
 email-enable:

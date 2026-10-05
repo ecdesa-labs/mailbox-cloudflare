@@ -1,0 +1,4 @@
+# Copie para .dev.vars (ignorado pelo git) para desenvolver o front sem
+# Access: a API aceita qualquer requisição como dev@localhost. Só funciona
+# com host localhost/127.0.0.1; em produção a variável sozinha não abre nada.
+MAILBOX_AUTH_BYPASS=1

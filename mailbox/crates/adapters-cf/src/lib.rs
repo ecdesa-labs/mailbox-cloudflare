@@ -2,12 +2,14 @@
 //! nativo o crate fica vazio, assim `cargo test --workspace` não quebra.
 #![cfg(target_arch = "wasm32")]
 
+mod access;
 mod d1;
 mod d1_read;
 mod queue;
 mod r2;
 mod runtime;
 
+pub use access::JwksVerifier;
 pub use d1::D1Index;
 pub use queue::{QueueIngest, WireIngestJob};
 pub use r2::{EmailRawStore, R2Blobs};

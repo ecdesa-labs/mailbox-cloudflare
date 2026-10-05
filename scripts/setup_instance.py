@@ -51,6 +51,10 @@ DEFAULTS = {
     "database_id": "00000000-0000-0000-0000-000000000000",
     "queue": "mail-ingest",
     "dlq": "mail-ingest-dlq",
+    # Cloudflare Access (docs seção 6.5). Vazio = Worker nega toda a API.
+    "access_team": "",
+    "access_aud": "",
+    "allowed_emails": [],
 }
 RESOURCE_KEYS = ("worker", "bucket", "database", "queue", "dlq")
 
@@ -60,6 +64,9 @@ UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 LABEL_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
 COLOR_RE = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
 ULID_RE = re.compile(r"^[0-7][0-9A-HJKMNP-TV-Z]{25}$")
+ACCESS_TEAM_RE = re.compile(r"^[a-z0-9][a-z0-9-]*\.cloudflareaccess\.com$")
+ACCESS_AUD_RE = re.compile(r"^[0-9a-f]{32,128}$")
+EMAIL_RE = re.compile(r"^[^@\s,]+@[^@\s,]+\.[^@\s,]+$")
 CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 GENERATED = "GERADO por scripts/setup_instance.py a partir de {src}. Não edite aqui."
@@ -91,6 +98,15 @@ def validate(cfg: dict) -> None:
         raise ConfigError("queue e dlq precisam ter nomes diferentes")
     if not UUID_RE.match(cfg["database_id"]):
         raise ConfigError(f"database_id inválido: {cfg['database_id']!r} (UUID)")
+    if cfg["access_team"] and not ACCESS_TEAM_RE.match(cfg["access_team"]):
+        raise ConfigError(f"access_team inválido: {cfg['access_team']!r} (ex.: acmeco.cloudflareaccess.com)")
+    if cfg["access_aud"] and not ACCESS_AUD_RE.match(cfg["access_aud"]):
+        raise ConfigError(f"access_aud inválido: {cfg['access_aud']!r} (Application Audience Tag, hexadecimal)")
+    if bool(cfg["access_team"]) != bool(cfg["access_aud"]):
+        raise ConfigError("access_team e access_aud andam juntos")
+    for e in cfg["allowed_emails"]:
+        if not EMAIL_RE.match(e):
+            raise ConfigError(f"email inválido em allowed_emails: {e!r}")
     domains = cfg["domains"]
     if not domains:
         raise ConfigError("informe ao menos um --domain")
@@ -142,6 +158,12 @@ def apply_args(cfg: dict, args: argparse.Namespace) -> dict:
             cfg[key] = value
     if args.database_id is not None:
         cfg["database_id"] = args.database_id.lower()
+    if args.access_team is not None:
+        cfg["access_team"] = args.access_team.strip().lower().removeprefix("https://").rstrip("/")
+    if args.access_aud is not None:
+        cfg["access_aud"] = args.access_aud.strip().lower()
+    if args.allowed_email:
+        cfg["allowed_emails"] = [e.strip().lower() for e in args.allowed_email if e.strip()]
 
     if args.domain:
         for flag, values in (("--label", args.label), ("--color", args.color)):
@@ -175,8 +197,9 @@ def render(root: Path, cfg: dict) -> dict[Path, str]:
     tmpl = root / "templates"
 
     wrangler = Template((tmpl / "wrangler.toml.tmpl").read_text(encoding="utf-8")).substitute(
-        {k: cfg[k] for k in (*RESOURCE_KEYS, "database_id")},
+        {k: cfg[k] for k in (*RESOURCE_KEYS, "database_id", "access_team", "access_aud")},
         domains=",".join(d["name"] for d in cfg["domains"]),
+        allowed_emails=",".join(cfg["allowed_emails"]),
     )
 
     rows = ",\n".join(
@@ -199,6 +222,7 @@ def render(root: Path, cfg: dict) -> dict[Path, str]:
 
 def dump(cfg: dict) -> str:
     ordered = {k: cfg[k] for k in (*RESOURCE_KEYS[:3], "database_id", *RESOURCE_KEYS[3:])}
+    ordered |= {k: cfg[k] for k in ("access_team", "access_aud", "allowed_emails")}
     ordered["domains"] = cfg["domains"]
     return json.dumps(ordered, indent=2, ensure_ascii=False) + "\n"
 
@@ -224,6 +248,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     r.add_argument("--database-id", help="id do D1 impresso por `wrangler d1 create`")
     r.add_argument("--queue", help="fila de ingestão")
     r.add_argument("--dlq", help="fila de mensagens mortas")
+
+    a = p.add_argument_group("Cloudflare Access (Zero Trust > Access > Applications)")
+    a.add_argument("--access-team", help="team domain, ex.: acmeco.cloudflareaccess.com")
+    a.add_argument("--access-aud", help="Application Audience (AUD) Tag")
+    a.add_argument("--allowed-email", action="append", default=[], help="email permitido (repetível; vazio = quem a política do Access deixar)")
 
     p.add_argument("--check", action="store_true", help="não escreve; falha se os gerados estão desatualizados")
     p.add_argument("--root", type=Path, default=ROOT, help=argparse.SUPPRESS)

@@ -1,11 +1,16 @@
 //! Casos de uso e portas (traits). Não pode importar `worker`.
 
+pub mod auth;
 pub mod ingest;
 pub mod ports;
 pub mod process;
 pub mod read;
 pub mod reconcile;
 
+pub use auth::{
+    authenticate, base64url_decode, AccessConfig, AuthError, Identity, SignatureVerifier,
+    VerifyError,
+};
 pub use ingest::{Envelope, IngestEmail, IngestOutcome};
 pub use ports::{
     BlobStore, Clock, ExistingMessage, FailureLog, IdGenerator, IngestJob, IngestQueue, MailIndex,

@@ -75,6 +75,27 @@ class InstanciaNova(unittest.TestCase):
         run(self.root, "--domain", "a.com", "--label", "Outro", "--color", "#333")
         self.assertEqual(self.cfg()["domains"][0]["id"], antes["domains"][0]["id"])
 
+    def test_access(self):
+        aud = "a" * 64
+        code, _ = run(self.root, "--domain", "a.com", "--label", "A", "--color", "#111",
+                      "--access-team", "https://Acmeco.cloudflareaccess.com/", "--access-aud", aud.upper(),
+                      "--allowed-email", "Rosa@a.com")  # fmt: skip
+        self.assertEqual(code, 0)
+        cfg = self.cfg()
+        self.assertEqual((cfg["access_team"], cfg["access_aud"], cfg["allowed_emails"]),
+                         ("acmeco.cloudflareaccess.com", aud, ["rosa@a.com"]))  # fmt: skip
+        w = (self.root / "wrangler.toml").read_text()
+        self.assertIn('MAILBOX_ACCESS_TEAM = "acmeco.cloudflareaccess.com"', w)
+        self.assertIn('MAILBOX_ALLOWED_EMAILS = "rosa@a.com"', w)
+        for argv, msg in [
+            (["--access-team", "acmeco.com"], "access_team inválido"),
+            (["--access-aud", ""], "andam juntos"),
+            (["--access-aud", "nao-hex"], "access_aud inválido"),
+            (["--allowed-email", "sem-arroba"], "email inválido"),
+        ]:
+            with self.subTest(argv=argv):
+                self.assertEqual(run(self.root, *argv)[0], 2)
+
     def test_escapa_aspas_no_sql(self):
         run(self.root, "--domain", "a.com", "--label", "D'Ávila", "--color", "#111")
         seed = (self.root / "migrations/0002_seed_domains.sql").read_text()

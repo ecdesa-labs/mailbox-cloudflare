@@ -55,6 +55,10 @@ MAILBOX_DLQ = "$dlq"
 MAILBOX_FULL_MAX_BYTES = "524288"
 MAILBOX_MAX_ATTACHMENTS = "30"
 MAILBOX_RECONCILE_BUDGET = "50"
+# Cloudflare Access (docs seção 6.5). Vazios = API negada (falha fechada).
+MAILBOX_ACCESS_TEAM = "$access_team"
+MAILBOX_ACCESS_AUD = "$access_aud"
+MAILBOX_ALLOWED_EMAILS = "$allowed_emails"
 
 [observability]
 enabled = true

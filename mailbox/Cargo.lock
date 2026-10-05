@@ -427,6 +427,7 @@ version = "0.0.0"
 dependencies = [
  "mailbox-domain",
  "mailbox-mime",
+ "serde_json",
 ]
 
 [[package]]

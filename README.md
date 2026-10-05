@@ -105,6 +105,27 @@ Se o domínio tiver um **Null MX** (`MX 0 .`) ou SPF `v=spf1 -all` (configuraç�
 de "domínio sem email"), o `email-enable` é recusado: remova o Null MX e troque
 o SPF por `v=spf1 include:_spf.mx.cloudflare.net ~all` no painel antes.
 
+### Proteger com o Cloudflare Access
+
+A API só responde a quem passou pelo Access; sem configurar, ela nega tudo.
+
+1. No painel: **Workers & Pages → mailbox → Access → Protect this Worker
+   behind Access**. Escolha a política (ex.: só a sua conta Cloudflare).
+2. Em **Zero Trust → Access → Applications**, abra a aplicação criada e copie
+   o **team domain** e o **Application Audience (AUD) Tag**.
+3. Grave na instância e publique:
+
+   ```bash
+   just configure --access-team seutime.cloudflareaccess.com --access-aud <AUD> --allowed-email voce@exemplo.com
+   just deploy
+   ```
+
+4. Abra `https://<worker>.<conta>.workers.dev/api/me` no navegador: depois do
+   login, ele mostra o seu email.
+
+Para desenvolver local sem Access, copie `mailbox/.dev.vars.example` para
+`mailbox/.dev.vars` (só funciona em `localhost`).
+
 ### Vários domínios
 
 `--label` e `--color` seguem a ordem dos `--domain`:
@@ -212,7 +233,7 @@ e por isso são testados nativamente, sem Cloudflare.
 | 3 | Handler `email`: receber de verdade | ✅ |
 | 4 | Handler `queue`: processar, idempotente, DLQ, modo leve, reconciliação | ✅ |
 | 5 | API de leitura com paginação por cursor | ✅ (local; vai para produção com a Fase 6) |
-| 6 | Autenticação com Cloudflare Access | |
+| 6 | Autenticação com Cloudflare Access | ✅ (local; falta ligar o Access em produção) |
 | 7 | Busca, flags, pastas, ações em lote, regras de roteamento | |
 | 8 | Responder e enviar (Email Sending) | |
 | 9 | Retenção, métricas, logs estruturados, OpenAPI | |

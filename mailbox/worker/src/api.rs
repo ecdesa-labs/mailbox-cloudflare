@@ -1,19 +1,25 @@
 //! API de leitura (docs seção 7). JSON, datas em Unix ms, cursor opaco.
 //! Erros: `{ "error": { "code", "message" } }` com status coerente.
 
-use mailbox_adapters_cf::{D1Index, R2Blobs};
+use mailbox_adapters_cf::{D1Index, JwksVerifier, R2Blobs, WorkerClock};
 use mailbox_application::{
-    content_disposition, is_inline_safe, list_page, AttachmentMeta, BlobStore, DomainSummary,
-    ListItem, ListQuery, MessageDetail, Person, QueryError, ReadModel, ThreadView,
+    authenticate, content_disposition, is_inline_safe, list_page, AccessConfig, AttachmentMeta,
+    AuthError, BlobStore, Clock, DomainSummary, Identity, ListItem, ListQuery, MessageDetail,
+    Person, QueryError, ReadModel, ThreadView,
 };
 use mailbox_domain::{AttachmentId, MessageId, ThreadId};
 use mailbox_mime::{restore_remote_images, REMOTE_SRC_ATTR};
 use serde_json::{json, Value};
 use worker::*;
 
-pub fn router() -> Router<'static, ()> {
-    Router::new()
+/// `identity` já validada em `authorize` (ou `None` só no `/api/ping`).
+pub fn router(identity: Option<Identity>) -> Router<'static, Option<Identity>> {
+    Router::with_data(identity)
         .get("/api/ping", |_, _| Response::ok("pong"))
+        .get("/api/me", |_, ctx| match &ctx.data {
+            Some(i) => Response::from_json(&json!({ "email": i.email })),
+            None => error_response(401, "unauthorized", "sem identidade"),
+        })
         .get_async("/api/domains", |_, ctx| async move {
             handle(domains(&ctx.env).await)
         })
@@ -353,4 +359,63 @@ async fn raw(env: &Env, id: Option<&String>) -> std::result::Result<Response, Ap
         &content_disposition(false, Some(&name)),
     )?;
     Ok(r)
+}
+
+// ---------------------------------------------------------------- auth ----
+
+/// Docs seção 6.5. Sem configuração do Access, nega tudo (falha fechada).
+/// O bypass só vale com `MAILBOX_AUTH_BYPASS=1` **e** host local: em
+/// produção a variável sozinha não abre nada.
+pub async fn authorize(req: &Request, env: &Env) -> std::result::Result<Identity, Response> {
+    let url = req.url().map_err(|_| unauthorized("url inválida"))?;
+    let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    let var = |name: &str| env.var(name).map(|v| v.to_string()).unwrap_or_default();
+    if local && var("MAILBOX_AUTH_BYPASS") == "1" {
+        return Ok(Identity {
+            email: "dev@localhost".into(),
+        });
+    }
+
+    let Some(cfg) = AccessConfig::new(
+        &var("MAILBOX_ACCESS_TEAM"),
+        &var("MAILBOX_ACCESS_AUD"),
+        &var("MAILBOX_ALLOWED_EMAILS"),
+    ) else {
+        console_error!(
+            r#"{{"event":"auth","error":"MAILBOX_ACCESS_TEAM/MAILBOX_ACCESS_AUD ausentes"}}"#
+        );
+        return Err(
+            error_response(503, "unavailable", "autenticação não configurada")
+                .unwrap_or_else(|_| Response::empty().unwrap().with_status(503)),
+        );
+    };
+    let token = req.headers().get("Cf-Access-Jwt-Assertion").ok().flatten();
+    let certs = cfg.certs_url();
+    match authenticate(
+        &cfg,
+        &JwksVerifier { certs_url: &certs },
+        token.as_deref(),
+        WorkerClock.now(),
+    )
+    .await
+    {
+        Ok(i) => Ok(i),
+        Err(AuthError::Keys(e)) => {
+            console_error!("{}", json!({ "event": "auth", "error": e.0 }));
+            Err(
+                error_response(503, "unavailable", "chaves do Access indisponíveis")
+                    .unwrap_or_else(|_| Response::empty().unwrap().with_status(503)),
+            )
+        }
+        Err(e) => {
+            console_log!("{}", json!({ "event": "auth", "denied": e.to_string() }));
+            Err(unauthorized("acesso negado"))
+        }
+    }
+}
+
+/// Mensagem genérica: o motivo exato fica só no log.
+fn unauthorized(message: &str) -> Response {
+    error_response(401, "unauthorized", message)
+        .unwrap_or_else(|_| Response::empty().unwrap().with_status(401))
 }
