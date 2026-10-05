@@ -26,6 +26,7 @@ pub trait Clock {
 pub trait IdGenerator {
     fn message_id(&self, at: UnixMs) -> MessageId;
     fn identity_id(&self, at: UnixMs) -> IdentityId;
+    fn rule_id(&self, at: UnixMs) -> mailbox_domain::RuleId;
 }
 
 /// Grava o `.eml` recebido em `job.raw_key`. O adaptador já conhece a origem

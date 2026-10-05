@@ -36,6 +36,9 @@ impl IdGenerator for SeqIds {
         self.0.set(self.0.get() + 1);
         IdentityId::from_parts(at, self.0.get())
     }
+    fn rule_id(&self, at: UnixMs) -> mailbox_domain::RuleId {
+        mailbox_domain::RuleId::from_parts(at, 0)
+    }
 }
 
 #[derive(Default)]

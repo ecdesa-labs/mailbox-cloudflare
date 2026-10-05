@@ -6,6 +6,7 @@ pub mod ports;
 pub mod process;
 pub mod read;
 pub mod reconcile;
+pub mod write;
 
 pub use auth::{
     authenticate, base64url_decode, AccessConfig, AuthError, Identity, SignatureVerifier,
@@ -21,8 +22,12 @@ pub use process::{
     handle_job, Delivery, ProcessError, ProcessMessage, ProcessOutcome, TRUSTED_AUTHSERV_ID,
 };
 pub use read::{
-    content_disposition, is_inline_safe, list_page, AttachmentMeta, Cursor, DomainSummary,
-    IdentitySummary, ListItem, ListQuery, MessageDetail, Page, Person, QueryError, ReadModel,
-    ThreadView,
+    content_disposition, fts_query, is_inline_safe, list_page, AttachmentMeta, Cursor,
+    DomainSummary, IdentitySummary, ListItem, ListQuery, MessageDetail, Page, Person, QueryError,
+    ReadModel, ThreadView,
 };
 pub use reconcile::{Reconcile, ReconcileReport};
+pub use write::{
+    apply_rule_patch, rule_from_json, rule_json, BulkPatch, MailWriter, MessagePatch, RuleStore,
+    MAX_BULK,
+};

@@ -244,7 +244,7 @@ e por isso são testados nativamente, sem Cloudflare.
 | 4 | Handler `queue`: processar, idempotente, DLQ, modo leve, reconciliação | ✅ |
 | 5 | API de leitura com paginação por cursor | ✅ |
 | 6 | Autenticação com Cloudflare Access | ✅ |
-| 7 | Busca, flags, pastas, ações em lote, regras de roteamento | |
+| 7 | Busca, flags, pastas, ações em lote, regras de roteamento | ✅ |
 | 8 | Responder e enviar (Email Sending) | |
 | 9 | Retenção, métricas, logs estruturados, OpenAPI | |
 

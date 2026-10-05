@@ -16,6 +16,9 @@ mod api;
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     // Só /api/* chega aqui (run_worker_first); o front estático é servido
     // direto pelos Assets, atrás do Access na borda.
+    if let Some(resp) = api::csrf_check(&req) {
+        return Ok(resp);
+    }
     let path = req.path();
     let identity = if path == "/api/ping" {
         None

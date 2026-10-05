@@ -36,4 +36,8 @@ impl IdGenerator for CryptoIds {
     fn identity_id(&self, at: UnixMs) -> IdentityId {
         IdentityId::from_parts(at, Self::random80())
     }
+
+    fn rule_id(&self, at: UnixMs) -> mailbox_domain::RuleId {
+        mailbox_domain::RuleId::from_parts(at, Self::random80())
+    }
 }

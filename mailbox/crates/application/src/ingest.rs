@@ -119,6 +119,9 @@ mod tests {
         fn identity_id(&self, at: UnixMs) -> mailbox_domain::IdentityId {
             mailbox_domain::IdentityId::from_parts(at, 0)
         }
+        fn rule_id(&self, at: UnixMs) -> mailbox_domain::RuleId {
+            mailbox_domain::RuleId::from_parts(at, 0)
+        }
     }
 
     #[derive(Default)]

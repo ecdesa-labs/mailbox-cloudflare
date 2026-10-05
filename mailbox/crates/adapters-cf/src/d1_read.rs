@@ -143,10 +143,19 @@ impl D1Index<'_> {
 
 impl ReadModel for D1Index<'_> {
     async fn list(&self, q: &ListQuery, limit: u32) -> Result<Vec<ListItem>, PortError> {
-        let mut sql = format!(
-            "SELECT {ITEM_COLUMNS} {ITEM_FROM} WHERE m.deleted_at IS NULL AND m.folder = ?"
-        );
-        let mut args = vec![s(q.folder.as_str())];
+        let mut sql = format!("SELECT {ITEM_COLUMNS} {ITEM_FROM} WHERE m.deleted_at IS NULL");
+        let mut args = Vec::new();
+        if let Some(f) = q.folder {
+            sql.push_str(" AND m.folder = ?");
+            args.push(s(f.as_str()));
+        }
+        // `search` já vem montado por `fts_query`: só termos entre aspas.
+        if let Some(expr) = &q.search {
+            sql.push_str(
+                " AND m.seq IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)",
+            );
+            args.push(s(expr));
+        }
         if let Some(d) = &q.domain {
             sql.push_str(" AND d.name = ?");
             args.push(s(d.as_str()));

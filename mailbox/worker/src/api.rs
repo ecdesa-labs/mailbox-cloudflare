@@ -1,13 +1,15 @@
 //! API de leitura (docs seção 7). JSON, datas em Unix ms, cursor opaco.
 //! Erros: `{ "error": { "code", "message" } }` com status coerente.
 
+use mailbox_adapters_cf::CryptoIds;
 use mailbox_adapters_cf::{D1Index, JwksVerifier, R2Blobs, WorkerClock};
 use mailbox_application::{
-    authenticate, content_disposition, is_inline_safe, list_page, AccessConfig, AttachmentMeta,
-    AuthError, BlobStore, Clock, DomainSummary, Identity, ListItem, ListQuery, MessageDetail,
-    Person, QueryError, ReadModel, ThreadView,
+    apply_rule_patch, authenticate, content_disposition, is_inline_safe, list_page, rule_from_json,
+    rule_json, AccessConfig, AttachmentMeta, AuthError, BlobStore, BulkPatch, Clock, DomainSummary,
+    IdGenerator, Identity, ListItem, ListQuery, MailWriter, MessageDetail, MessagePatch, Person,
+    QueryError, ReadModel, RuleStore, ThreadView,
 };
-use mailbox_domain::{AttachmentId, MessageId, ThreadId};
+use mailbox_domain::{AttachmentId, MessageId, RuleId, ThreadId};
 use mailbox_mime::{restore_remote_images, REMOTE_SRC_ATTR};
 use serde_json::{json, Value};
 use worker::*;
@@ -37,6 +39,24 @@ pub fn router(identity: Option<Identity>) -> Router<'static, Option<Identity>> {
         })
         .get_async("/api/attachments/:id", |_, ctx| async move {
             handle(attachment(&ctx.env, ctx.param("id")).await)
+        })
+        .patch_async("/api/messages/:id", |req, ctx| async move {
+            handle(patch_message(req, &ctx.env, ctx.param("id")).await)
+        })
+        .post_async("/api/messages/bulk", |req, ctx| async move {
+            handle(bulk(req, &ctx.env).await)
+        })
+        .get_async("/api/rules", |_, ctx| async move {
+            handle(list_rules(&ctx.env).await)
+        })
+        .post_async("/api/rules", |req, ctx| async move {
+            handle(create_rule(req, &ctx.env).await)
+        })
+        .patch_async("/api/rules/:id", |req, ctx| async move {
+            handle(update_rule(req, &ctx.env, ctx.param("id")).await)
+        })
+        .delete_async("/api/rules/:id", |_, ctx| async move {
+            handle(delete_rule(&ctx.env, ctx.param("id")).await)
         })
         .or_else_any_method("/api/*rest", |_, _| {
             error_response(404, "not_found", "rota desconhecida")
@@ -418,4 +438,119 @@ pub async fn authorize(req: &Request, env: &Env) -> std::result::Result<Identity
 fn unauthorized(message: &str) -> Response {
     error_response(401, "unauthorized", message)
         .unwrap_or_else(|_| Response::empty().unwrap().with_status(401))
+}
+
+// ------------------------------------------------------------- escrita ----
+
+/// CSRF: o Access autentica por cookie, que o navegador manda junto com
+/// requisições de outros sites. Mutação só com `Content-Type:
+/// application/json` (formulário entre sites não consegue sem pré-checagem
+/// de CORS, que recusamos) e, quando o navegador informa, mesma origem.
+pub fn csrf_check(req: &Request) -> Option<Response> {
+    let method = req.method();
+    if matches!(method, Method::Get | Method::Head | Method::Options) {
+        return None;
+    }
+    let header = |name: &str| req.headers().get(name).ok().flatten().unwrap_or_default();
+    if header("Sec-Fetch-Site") == "cross-site" {
+        return error_response(403, "forbidden", "requisição de outro site").ok();
+    }
+    let origin = header("Origin");
+    if !origin.is_empty() {
+        let own = req
+            .url()
+            .ok()
+            .map(|u| u.origin().ascii_serialization())
+            .unwrap_or_default();
+        if origin != own {
+            return error_response(403, "forbidden", "origem diferente da API").ok();
+        }
+    }
+    let has_body = matches!(method, Method::Post | Method::Patch | Method::Put);
+    let ct = header("Content-Type").to_ascii_lowercase();
+    if has_body && !ct.starts_with("application/json") {
+        return error_response(
+            415,
+            "unsupported_media_type",
+            "use Content-Type: application/json",
+        )
+        .ok();
+    }
+    None
+}
+
+async fn json_body(req: &mut Request) -> std::result::Result<Value, ApiError> {
+    req.json::<Value>()
+        .await
+        .map_err(|_| ApiError::bad_request("corpo não é JSON válido".into()))
+}
+
+async fn patch_message(
+    mut req: Request,
+    env: &Env,
+    id: Option<&String>,
+) -> std::result::Result<Response, ApiError> {
+    let id: MessageId = parse_id(id, MessageId::parse, "mensagem")?;
+    let patch = MessagePatch::from_json(&json_body(&mut req).await?)?;
+    let db = env.d1("DB")?;
+    let index = D1Index { db: &db };
+    if !index.patch_message(id, &patch).await? {
+        return Err(ApiError::not_found("mensagem"));
+    }
+    let m = index
+        .message(id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("mensagem"))?;
+    json_ok(&item_json(&m.item))
+}
+
+async fn bulk(mut req: Request, env: &Env) -> std::result::Result<Response, ApiError> {
+    let b = BulkPatch::from_json(&json_body(&mut req).await?)?;
+    let db = env.d1("DB")?;
+    let updated = D1Index { db: &db }.patch_many(&b.ids, &b.patch).await?;
+    json_ok(&json!({ "updated": updated }))
+}
+
+async fn list_rules(env: &Env) -> std::result::Result<Response, ApiError> {
+    let db = env.d1("DB")?;
+    let rules = D1Index { db: &db }.list_rules().await?;
+    json_ok(&json!({ "items": rules.iter().map(rule_json).collect::<Vec<_>>() }))
+}
+
+async fn create_rule(mut req: Request, env: &Env) -> std::result::Result<Response, ApiError> {
+    let rule = rule_from_json(
+        CryptoIds.rule_id(WorkerClock.now()),
+        &json_body(&mut req).await?,
+    )?;
+    let db = env.d1("DB")?;
+    D1Index { db: &db }.put_rule(&rule).await?;
+    Ok(json_ok(&rule_json(&rule))?.with_status(201))
+}
+
+async fn update_rule(
+    mut req: Request,
+    env: &Env,
+    id: Option<&String>,
+) -> std::result::Result<Response, ApiError> {
+    let id: RuleId = parse_id(id, RuleId::parse, "regra")?;
+    let body = json_body(&mut req).await?;
+    let db = env.d1("DB")?;
+    let store = D1Index { db: &db };
+    let current = store
+        .get_rule(id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("regra"))?;
+    let rule = apply_rule_patch(current, &body)?;
+    store.put_rule(&rule).await?;
+    json_ok(&rule_json(&rule))
+}
+
+async fn delete_rule(env: &Env, id: Option<&String>) -> std::result::Result<Response, ApiError> {
+    let id: RuleId = parse_id(id, RuleId::parse, "regra")?;
+    let db = env.d1("DB")?;
+    let deleted = D1Index { db: &db }.delete_rule(id).await?;
+    if !deleted {
+        return Err(ApiError::not_found("regra"));
+    }
+    Ok(Response::empty()?.with_status(204))
 }

@@ -5,6 +5,7 @@
 mod access;
 mod d1;
 mod d1_read;
+mod d1_write;
 mod queue;
 mod r2;
 mod runtime;

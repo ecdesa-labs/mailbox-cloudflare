@@ -34,11 +34,36 @@ impl Cursor {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListQuery {
-    pub folder: Folder,
+    /// `None` = todas as pastas (só numa busca sem `folder`).
+    pub folder: Option<Folder>,
     /// `None` = caixa unificada.
     pub domain: Option<DomainName>,
     pub limit: u32,
     pub after: Option<Cursor>,
+    /// Expressão FTS5 já montada por `fts_query` (nunca o texto cru).
+    pub search: Option<String>,
+}
+
+/// Máximo de termos numa busca.
+const MAX_TERMS: usize = 8;
+
+/// Texto do usuário → expressão FTS5 segura. Cada termo vira `"termo"*`
+/// (prefixo), todos obrigatórios. Aspas, `*`, `OR`, `NEAR(` e afins não
+/// passam como sintaxe: só letras e dígitos formam termos. `None` se não
+/// sobrar termo.
+pub fn fts_query(input: &str) -> Option<String> {
+    let terms: Vec<String> = input
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .take(MAX_TERMS)
+        .map(|t| {
+            format!(
+                "\"{}\"*",
+                t.to_lowercase().chars().take(64).collect::<String>()
+            )
+        })
+        .collect();
+    (!terms.is_empty()).then(|| terms.join(" "))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,21 +94,26 @@ impl ListQuery {
         params: impl IntoIterator<Item = (&'a str, &'a str)>,
     ) -> Result<Self, QueryError> {
         let mut q = Self {
-            folder: Folder::Inbox,
+            folder: None,
             domain: None,
             limit: DEFAULT_LIMIT,
             after: None,
+            search: None,
         };
+        let mut folder_given = false;
         let invalid = |param, message: &str| QueryError::Invalid {
             param,
             message: message.to_owned(),
         };
         for (k, v) in params {
             match k {
+                "folder" if v.is_empty() => {}
                 "folder" => {
-                    q.folder = v
-                        .parse()
-                        .map_err(|_| invalid("folder", "pasta desconhecida"))?
+                    folder_given = true;
+                    q.folder = Some(
+                        v.parse()
+                            .map_err(|_| invalid("folder", "pasta desconhecida"))?,
+                    )
                 }
                 "domain" if v.is_empty() => q.domain = None,
                 "domain" => {
@@ -104,14 +134,17 @@ impl ListQuery {
                         Cursor::decode(v).ok_or_else(|| invalid("cursor", "cursor inválido"))?,
                     )
                 }
-                "q" if !v.trim().is_empty() => {
-                    return Err(QueryError::NotImplemented {
-                        param: "q",
-                        phase: 7,
-                    })
+                "q" if v.trim().is_empty() => {}
+                "q" => {
+                    q.search = Some(fts_query(v).ok_or_else(|| invalid("q", "nada para buscar"))?)
                 }
                 _ => {}
             }
+        }
+        // Sem busca, a lista é sempre de uma pasta (padrão: entrada). Uma
+        // busca sem `folder` olha todas.
+        if !folder_given && q.search.is_none() {
+            q.folder = Some(Folder::Inbox);
         }
         Ok(q)
     }

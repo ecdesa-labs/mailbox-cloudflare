@@ -39,8 +39,8 @@ fn cursor_ida_e_volta() {
 fn parametros_padrao() {
     let q = ListQuery::from_params([]).unwrap();
     assert_eq!(
-        (q.folder, q.domain, q.limit, q.after),
-        (Folder::Inbox, None, DEFAULT_LIMIT, None)
+        (q.folder, q.domain, q.limit, q.after, q.search),
+        (Some(Folder::Inbox), None, DEFAULT_LIMIT, None, None)
     );
 }
 
@@ -60,7 +60,7 @@ fn parametros_validos() {
         ("outro", "ignorado"),
     ])
     .unwrap();
-    assert_eq!(q.folder, Folder::Archive);
+    assert_eq!(q.folder, Some(Folder::Archive));
     assert_eq!(q.domain.unwrap().as_str(), "acmeco.com.br");
     assert_eq!(q.limit, 10);
     assert_eq!(q.after.unwrap().received_at, 5);
@@ -84,13 +84,10 @@ fn parametros_invalidos() {
             "{k}={v}"
         );
     }
-    assert_eq!(
-        ListQuery::from_params([("q", "fatura")]),
-        Err(QueryError::NotImplemented {
-            param: "q",
-            phase: 7
-        })
-    );
+    assert!(matches!(
+        ListQuery::from_params([("q", "!!! \"*")]),
+        Err(QueryError::Invalid { param: "q", .. })
+    ));
 }
 
 struct Fixed(Vec<ListItem>);
@@ -179,4 +176,48 @@ fn content_disposition_seguro() {
     // Quebra de linha no nome não pode injetar header.
     let h = content_disposition(false, Some("a\r\nSet-Cookie: x=1"));
     assert!(!h.contains('\r') && !h.contains('\n'), "{h}");
+}
+
+#[test]
+fn busca_vira_expressao_segura() {
+    assert_eq!(
+        fts_query("Fatura de Outubro").as_deref(),
+        Some(r#""fatura"* "de"* "outubro"*"#)
+    );
+    assert_eq!(fts_query("orçamento").as_deref(), Some(r#""orçamento"*"#));
+    // Sintaxe do FTS5 não passa: vira texto comum ou some.
+    assert_eq!(
+        fts_query(r#"a" OR "b"#).as_deref(),
+        Some(r#""a"* "or"* "b"*"#)
+    );
+    assert_eq!(
+        fts_query("NEAR(x y)").as_deref(),
+        Some(r#""near"* "x"* "y"*"#)
+    );
+    assert_eq!(
+        fts_query("joao@cliente.com.br").as_deref(),
+        Some(r#""joao"* "cliente"* "com"* "br"*"#)
+    );
+    assert_eq!(fts_query(r#"" * ( ) : ^"#), None);
+    assert_eq!(
+        fts_query("a b c d e f g h i j")
+            .unwrap()
+            .matches('"')
+            .count(),
+        16,
+        "no máximo 8 termos"
+    );
+}
+
+#[test]
+fn busca_sem_pasta_olha_todas() {
+    let q = ListQuery::from_params([("q", "fatura")]).unwrap();
+    assert_eq!(
+        (q.folder, q.search.as_deref()),
+        (None, Some(r#""fatura"*"#))
+    );
+    let q = ListQuery::from_params([("q", "fatura"), ("folder", "archive")]).unwrap();
+    assert_eq!(q.folder, Some(Folder::Archive));
+    let q = ListQuery::from_params([("q", "  ")]).unwrap();
+    assert_eq!((q.folder, q.search), (Some(Folder::Inbox), None));
 }

@@ -123,9 +123,14 @@ class Api:
         api.base = self.base
         return api
 
-    def request(self, path: str, data: bytes | None = None) -> tuple[int, dict[str, str], bytes]:
-        headers = {"Cf-Access-Jwt-Assertion": self.token} if self.token else {}
-        req = urllib.request.Request(self.base + path, data=data, method="POST" if data else "GET", headers=headers)
+    def request(
+        self, path: str, data: bytes | None = None, method: str | None = None, headers: dict | None = None
+    ) -> tuple[int, dict[str, str], bytes]:
+        h = {"Cf-Access-Jwt-Assertion": self.token} if self.token else {}
+        h |= headers or {}
+        # Acentos na query (ex.: q=orçamento) viram %XX como o navegador faria.
+        path = urllib.parse.quote(path, safe="/?&=%:+,;@*")
+        req = urllib.request.Request(self.base + path, data=data, method=method or ("POST" if data else "GET"), headers=h)
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 return r.status, {k.lower(): v for k, v in r.headers.items()}, r.read()
@@ -135,6 +140,13 @@ class Api:
     def json(self, path: str) -> tuple[int, dict]:
         status, _, body = self.request(path)
         return status, json.loads(body)
+
+    def send(self, method: str, path: str, body=None, headers: dict | None = None) -> tuple[int, dict]:
+        """Mutação com JSON (como o front faz). `headers` sobrescreve."""
+        h = {"Content-Type": "application/json"} | (headers or {})
+        data = None if body is None else (body if isinstance(body, bytes) else json.dumps(body).encode())
+        status, _, raw = self.request(path, data, method, h)
+        return status, (json.loads(raw) if raw else {})
 
 
 def free_port() -> int:
@@ -192,6 +204,7 @@ def main() -> int:
 
         verify_auth(api, access)
         verify(api, raws)
+        verify_writes(api)
     finally:
         if server:
             server.terminate()
@@ -265,7 +278,7 @@ def verify(api: Api, raws: dict[str, bytes]) -> None:
         ("/api/messages?folder=rascunho", "bad_request", 400),
         ("/api/messages?limit=0", "bad_request", 400),
         ("/api/messages?cursor=lixo", "bad_request", 400),
-        ("/api/messages?q=fatura", "not_implemented", 501),
+        ("/api/messages?q=%21%21%21", "bad_request", 400),
         ("/api/messages/lixo", "not_found", 404),
         ("/api/messages/01M44NRD000000000000000099", "not_found", 404),
         ("/api/threads/01M44NRD000000000000000099", "not_found", 404),
@@ -321,6 +334,89 @@ def verify(api: Api, raws: dict[str, bytes]) -> None:
     subjects = [x["subject"] for x in t.get("messages", [])]
     check(s == 200 and subjects == ["Orçamento de outubro", "Re: Orcamento"], "resposta na mesma thread, mais antiga primeiro")
 
+
+
+def wait_for(api: Api, path: str, pred, what: str, tries: int = 30):
+    for _ in range(tries):
+        s, body = api.json(path)
+        if s == 200 and pred(body):
+            return body
+        time.sleep(1)
+    check(False, what)
+    return None
+
+
+def verify_writes(api: Api) -> None:
+    def subjects(path: str) -> list[str]:
+        return sorted(i["subject"] for i in api.json(path)[1].get("items", []))
+
+    print("busca (q)")
+    check(subjects("/api/messages?q=orçamento") == ["Orçamento de outubro", "Re: Orcamento"], "assunto, sem diferenciar acento")
+    check("Orçamento de outubro" in subjects("/api/messages?q=jo%C3%A3o"), "nome do remetente (João)")
+    check(subjects("/api/messages?q=s%C3%ADmbolos") == ["Orçamento de outubro"], "palavra do corpo")
+    check(subjects("/api/messages?q=github") == ["Re: [acmeco/mailbox] CI passou"], "endereço do remetente")
+    check(subjects("/api/messages?q=orc+outub") == ["Orçamento de outubro"], "prefixo e termos combinados (E)")
+    check(subjects("/api/messages?q=inexistentexyz") == [], "sem resultado")
+    s, _ = api.json("/api/messages?q=" + urllib.parse.quote('" OR * NEAR( x:y ^'))
+    check(s == 200, "sintaxe do FTS5 no texto não quebra a busca")
+    check(api.json("/api/messages?q=" + urllib.parse.quote("!!! *"))[0] == 400, "só pontuação -> 400")
+
+    print("PATCH /api/messages/:id")
+    items = api.json("/api/messages?limit=100")[1]["items"]
+    by = {i["subject"]: i for i in items}
+    unread0 = api.json("/api/domains")[1]["items"][0]["unread"]
+    nl = by["Newsletter com logo"]
+    s, it = api.send("PATCH", f"/api/messages/{nl['id']}", {"read": True, "starred": True})
+    check(s == 200 and it["is_read"] and it["is_starred"], "lido + estrela devolve o item atualizado")
+    check(api.json("/api/domains")[1]["items"][0]["unread"] == unread0 - 1, "contador de não lidos cai")
+    s, it = api.send("PATCH", f"/api/messages/{nl['id']}", {"folder": "archive"})
+    check(s == 200 and it["folder"] == "archive", "mover para arquivo")
+    check("Newsletter com logo" not in subjects("/api/messages") and subjects("/api/messages?folder=archive") == ["Newsletter com logo"], "some da entrada, aparece no arquivo")
+    check("Newsletter com logo" in subjects("/api/messages?q=newsletter"), "busca sem pasta acha em qualquer pasta")
+    check(subjects("/api/messages?q=newsletter&folder=inbox") == [], "busca com pasta respeita a pasta")
+    for body, status in [({}, 400), ({"read": "sim"}, 400), ({"folder": "rascunho"}, 400), ({"lido": True}, 400)]:
+        check(api.send("PATCH", f"/api/messages/{nl['id']}", body)[0] == status, f"PATCH {body} -> {status}")
+    check(api.send("PATCH", "/api/messages/01M44NRD000000000000000099", {"read": True})[0] == 404, "mensagem inexistente -> 404")
+
+    print("CSRF")
+    path = f"/api/messages/{nl['id']}"
+    check(api.send("PATCH", path, b'{"read":false}', {"Content-Type": "text/plain"})[0] == 415, "text/plain (formulário) -> 415")
+    check(api.send("PATCH", path, {"read": False}, {"Origin": "https://malicioso.example"})[0] == 403, "Origin de outro site -> 403")
+    check(api.send("PATCH", path, {"read": False}, {"Sec-Fetch-Site": "cross-site"})[0] == 403, "Sec-Fetch-Site cross-site -> 403")
+    check(api.send("PATCH", path, {"read": False}, {"Origin": api.base})[0] == 200, "mesma origem passa")
+
+    print("POST /api/messages/bulk")
+    ids = [i["id"] for i in items][:3]
+    s, r = api.send("POST", "/api/messages/bulk", {"ids": ids, "patch": {"read": True}})
+    check(s == 200 and r == {"updated": 3}, "3 marcadas como lidas")
+    unread = {i["id"]: i["is_read"] for i in api.json("/api/messages?limit=100&q=")[1]["items"]}
+    check(all(unread.get(i, True) for i in ids), "refletiu na lista")
+    check(api.send("POST", "/api/messages/bulk", {"ids": ids * 40, "patch": {"read": True}})[0] == 200, "ids repetidos contam uma vez")
+    check(api.send("POST", "/api/messages/bulk", {"ids": [], "patch": {"read": True}})[0] == 400, "lista vazia -> 400")
+
+    print("regras")
+    s, rule = api.send("POST", "/api/rules", {"match_address": f"promo@{DOMAIN}", "action": "move", "folder": "archive", "priority": 1})
+    check(s == 201 and rule.get("folder") == "archive", "criar regra move -> 201")
+    s, rule2 = api.send("POST", "/api/rules", {"match_address": f"*@{DOMAIN}", "action": "mark_read", "priority": 2})
+    check(s == 201, "criar regra mark_read")
+    check(len(api.json("/api/rules")[1]["items"]) == 2, "listar regras")
+    check(api.send("POST", "/api/rules", {"match_address": "*", "action": "archive"})[0] == 400, "padrão inválido -> 400")
+    check(api.send("POST", "/api/rules", {"match_address": f"*@{DOMAIN}", "action": "move"})[0] == 400, "move sem pasta -> 400")
+    s, r2 = api.send("PATCH", f"/api/rules/{rule2['id']}", {"enabled": False})
+    check(s == 200 and r2["enabled"] is False and r2["action"] == "mark_read", "desabilitar mantém o resto")
+    s, r2 = api.send("PATCH", f"/api/rules/{rule2['id']}", {"enabled": True})
+
+    raw = b"Message-ID: <promo.1@loja.com>\r\nFrom: Loja <promo@loja.com>\r\nTo: promo@x.com\r\nSubject: Ofertas da semana\r\n\r\nDescontos.\r\n"
+    q = urllib.parse.urlencode({"from": "promo@loja.com", "to": f"promo@{DOMAIN}"})
+    api.request(f"/cdn-cgi/local/email?{q}", raw)
+    got = wait_for(api, "/api/messages?q=ofertas", lambda b: len(b["items"]) == 1, "email novo processado")
+    if got:
+        it = got["items"][0]
+        check(it["folder"] == "archive" and it["is_read"] is True, "regras aplicadas no email novo (arquivo + lido)")
+
+    check(api.send("DELETE", f"/api/rules/{rule['id']}", None)[0] == 204, "apagar regra -> 204")
+    check(api.send("DELETE", f"/api/rules/{rule['id']}", None)[0] == 404, "apagar de novo -> 404")
+    check(api.send("PATCH", "/api/rules/01M44NRD000000000000000099", {"enabled": False})[0] == 404, "regra inexistente -> 404")
 
 if __name__ == "__main__":
     sys.exit(main())
