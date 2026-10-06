@@ -285,7 +285,7 @@ Next.js estático em `mailbox/web`, servido pelo mesmo Worker.
 | 1 | Shell, design system, `lib/api` com modo mock | ✅ |
 | 2 | Lista: busca, seleção em lote, ações com desfazer | ✅ |
 | 3 | Leitor: HTML isolado, imagens remotas sob demanda, anexos | ✅ |
-| 4 | Threads: conversa agrupada, mensagens recolhíveis | |
+| 4 | Threads: conversa agrupada, mensagens recolhíveis | ✅ |
 | 5 | Atalhos de teclado e ajuda (`?`) | |
 | 6 | Compor e responder | ⏸ adiado junto com a fase 8 do back (envio) |
 | 7 | Tela de regras de roteamento | |
