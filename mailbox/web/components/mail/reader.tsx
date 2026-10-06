@@ -178,8 +178,8 @@ function Body({ detail, remote, onLoadRemote }: { detail: MessageDetail; remote:
 
       {detail.processing === 'partial' ? (
         <Banner tone="info" icon={File}>
-          Este email é grande demais para ser processado ({formatBytes(detail.size)}). O conteúdo e os anexos estão no
-          arquivo original.{' '}
+          Este email é grande demais para ser processado{detail.size > 0 ? ` (${formatBytes(detail.size)})` : ''}. O
+          conteúdo e os anexos estão no arquivo original.{' '}
           <a href={detail.raw_url} download className="font-medium underline underline-offset-2">
             Baixar o .eml
           </a>
