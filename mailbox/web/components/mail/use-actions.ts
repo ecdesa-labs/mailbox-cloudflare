@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
 import { queryKeys } from '@/lib/api/queries'
-import type { Folder, ListItem, MessagePatch, Page } from '@/lib/api/types'
+import type { Folder, ListItem, MessagePatch, Page, Thread } from '@/lib/api/types'
 import { FOLDER_LABELS } from './format'
 
 /** Limite do `POST /api/messages/bulk`. */
@@ -58,17 +58,32 @@ export function useMessageActions(onNotice: (n: Undo) => void) {
         })
       }
 
+      const threadSnapshot = qc.getQueriesData<Thread>({ queryKey: queryKeys.threads() })
+      for (const [key, t] of threadSnapshot) {
+        if (!t?.messages) continue
+        qc.setQueryData<Thread>(key, {
+          ...t,
+          messages: t.messages.map((m) =>
+            idSet.has(m.id)
+              ? { ...m, is_read: patch.read ?? m.is_read, is_starred: patch.starred ?? m.is_starred, folder: patch.folder ?? m.folder }
+              : m,
+          ),
+        })
+      }
+
       try {
         for (let i = 0; i < ids.length; i += BULK_MAX) {
           await apiClient.bulkPatchMessages(ids.slice(i, i + BULK_MAX), patch)
         }
       } catch (e) {
         for (const [key, data] of snapshot) qc.setQueryData(key, data)
+        for (const [key, data] of threadSnapshot) qc.setQueryData(key, data)
         onNotice({ text: 'Não foi possível concluir a ação. Nada foi alterado.' })
         throw e
       } finally {
         void qc.invalidateQueries({ queryKey: queryKeys.messages() })
         void qc.invalidateQueries({ queryKey: queryKeys.domains() })
+        void qc.invalidateQueries({ queryKey: queryKeys.threads() })
       }
 
       if (patch.folder && opts.undoable) {

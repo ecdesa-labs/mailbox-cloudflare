@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
-  AlertTriangle, Archive, ChevronLeft, Download, File, FileImage, ImageOff, Inbox, Mail,
+  AlertTriangle, Archive, ChevronDown, ChevronLeft, Download, File, FileImage, ImageOff, Inbox, Mail,
   MailOpen, ShieldAlert, Star, Trash2, type LucideIcon,
 } from 'lucide-react'
-import { useMessage } from '@/lib/api/queries'
-import { ApiRequestError, type Attachment, type ListItem, type MessageDetail, type MessagePatch, type Person } from '@/lib/api/types'
+import { useMessage, useThread } from '@/lib/api/queries'
+import { ApiRequestError, type Attachment, type ListItem, type MessageDetail, type MessagePatch, type Person, type Thread } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
 import { EmailFrame } from './email-frame'
-import { FOLDER_LABELS, formatBytes, formatFullDate } from './format'
+import { FOLDER_LABELS, formatBytes, formatFullDate, formatListDate } from './format'
 import { ErrorState, ReaderSkeleton } from './states'
 
 type Act = (items: ListItem[], patch: MessagePatch, opts?: { undoable?: boolean }) => void
@@ -20,20 +20,11 @@ function who(p: Person | null | undefined): string {
 }
 
 export function Reader({ id, onBack, onAct }: { id: string; onBack: () => void; onAct: Act }) {
-  // Imagens remotas: liberadas só para a mensagem em que o usuário pediu.
-  const [remoteFor, setRemoteFor] = useState<string | null>(null)
-  const remote = remoteFor === id
-  const message = useMessage(id || null, remote)
-
-  // Abrir marca como lida (uma vez por mensagem aberta).
-  const marked = useRef<string | null>(null)
+  const message = useMessage(id || null)
   const data = message.data
-  useEffect(() => {
-    if (data && data.id === id && !data.is_read && marked.current !== id) {
-      marked.current = id
-      onAct([data], { read: true })
-    }
-  }, [data, id, onAct])
+  // Conversa: só quando a thread tem mais de uma mensagem.
+  const thread = useThread(data?.thread_id ?? null)
+  const conversation = thread.data && thread.data.messages.length > 1 ? thread.data : null
 
   if (!id) {
     return (
@@ -65,12 +56,117 @@ export function Reader({ id, onBack, onAct }: { id: string; onBack: () => void; 
             message={message.error instanceof ApiRequestError ? message.error.message : undefined}
             onRetry={() => void message.refetch()}
           />
+        ) : conversation ? (
+          <Conversation key={`${conversation.id}:${id}`} thread={conversation} openId={id} onAct={onAct} />
         ) : data ? (
-          <Body detail={data} remote={remote} onLoadRemote={() => setRemoteFor(id)} />
+          <MessageBody id={id} onAct={onAct} />
         ) : null}
       </div>
     </section>
   )
+}
+
+/** Conversa, mais antiga primeiro. Abertas: a selecionada e a mais recente. */
+function Conversation({ thread, openId, onAct }: { thread: Thread; openId: string; onAct: Act }) {
+  const last = thread.messages[thread.messages.length - 1]?.id
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([openId, last].filter(Boolean) as string[]))
+  const toggle = (mid: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(mid)) next.delete(mid)
+      else next.add(mid)
+      return next
+    })
+  const allOpen = expanded.size === thread.messages.length
+
+  // A mensagem selecionada fica visível ao abrir a conversa.
+  const openRef = useRef<HTMLLIElement>(null)
+  useEffect(() => {
+    openRef.current?.scrollIntoView({ block: 'start' })
+  }, [])
+
+  return (
+    <div className="p-5 sm:p-6">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold tracking-tight first-letter:uppercase">{thread.subject || '(sem assunto)'}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">{thread.messages.length} mensagens nesta conversa</p>
+        </div>
+        <button
+          onClick={() => setExpanded(allOpen ? new Set([openId]) : new Set(thread.messages.map((m) => m.id)))}
+          className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+        >
+          {allOpen ? 'Recolher' : 'Expandir todas'}
+        </button>
+      </div>
+      <ol className="flex flex-col gap-2">
+        {thread.messages.map((m) => {
+          const isOpen = expanded.has(m.id)
+          return (
+            <li
+              key={m.id}
+              ref={m.id === openId ? openRef : undefined}
+              className={cn('rounded-xl border', m.id === openId ? 'border-primary/40' : 'border-border')}
+            >
+              <button
+                onClick={() => toggle(m.id)}
+                aria-expanded={isOpen}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left"
+              >
+                <span className="flex w-2 shrink-0 justify-center" aria-hidden="true">
+                  {!m.is_read && <span className="size-2 rounded-full bg-primary" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className={cn('truncate text-sm', !m.is_read && 'font-semibold')}>
+                      {m.from?.name || m.from?.addr || '(sem remetente)'}
+                    </span>
+                    <time className="shrink-0 text-[11px] text-muted-foreground">{formatListDate(m.received_at)}</time>
+                  </span>
+                  {!isOpen && <span className="block truncate text-xs text-muted-foreground">{m.snippet || m.subject}</span>}
+                </span>
+                <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />
+              </button>
+              {isOpen && (
+                <div className="border-t border-border">
+                  <MessageBody id={m.id} onAct={onAct} compact />
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
+
+/**
+ * Uma mensagem: carrega o detalhe, marca como lida ao aparecer e controla as
+ * imagens remotas dela. `compact` = dentro de uma conversa (sem título).
+ */
+function MessageBody({ id, onAct, compact = false }: { id: string; onAct: Act; compact?: boolean }) {
+  const [remote, setRemote] = useState(false)
+  const message = useMessage(id, remote)
+  const data = message.data
+
+  const marked = useRef(false)
+  useEffect(() => {
+    if (data && !data.is_read && !marked.current) {
+      marked.current = true
+      onAct([data], { read: true })
+    }
+  }, [data, onAct])
+
+  if (message.isLoading) return <ReaderSkeleton />
+  if (message.isError || !data) {
+    return (
+      <ErrorState
+        message={message.error instanceof ApiRequestError ? message.error.message : undefined}
+        onRetry={() => void message.refetch()}
+      />
+    )
+  }
+  return <Body detail={data} remote={remote} onLoadRemote={() => setRemote(true)} compact={compact} />
 }
 
 function Toolbar({ detail, onAct }: { detail: MessageDetail; onAct: Act }) {
@@ -134,7 +230,12 @@ function authWarning(d: MessageDetail): string | null {
   return null
 }
 
-function Body({ detail, remote, onLoadRemote }: { detail: MessageDetail; remote: boolean; onLoadRemote: () => void }) {
+function Body({ detail, remote, onLoadRemote, compact }: {
+  detail: MessageDetail
+  remote: boolean
+  onLoadRemote: () => void
+  compact: boolean
+}) {
   const [view, setView] = useState<'html' | 'text'>('html')
   const hasHtml = Boolean(detail.html)
   const showHtml = hasHtml && view === 'html'
@@ -142,13 +243,17 @@ function Body({ detail, remote, onLoadRemote }: { detail: MessageDetail; remote:
   const visibleAttachments = detail.attachments.filter((a) => !a.is_inline || !detail.html?.includes(a.url))
 
   return (
-    <article className="flex min-h-full flex-col gap-4 p-5 sm:p-6">
+    <article className={cn('flex flex-col gap-4', compact ? 'p-4' : 'min-h-full p-5 sm:p-6')}>
       <header>
-        <p className="text-xs font-medium text-muted-foreground">
-          {detail.domain} · {FOLDER_LABELS[detail.folder]}
-        </p>
-        <h2 className="mt-1 text-xl font-semibold tracking-tight">{detail.subject || '(sem assunto)'}</h2>
-        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
+        {!compact && (
+          <>
+            <p className="text-xs font-medium text-muted-foreground">
+              {detail.domain} · {FOLDER_LABELS[detail.folder]}
+            </p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight">{detail.subject || '(sem assunto)'}</h2>
+          </>
+        )}
+        <dl className={cn('grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm', !compact && 'mt-3')}>
           <dt className="text-muted-foreground">De</dt>
           <dd className="truncate">{who(detail.from)}</dd>
           <dt className="text-muted-foreground">Para</dt>
@@ -211,7 +316,8 @@ function Body({ detail, remote, onLoadRemote }: { detail: MessageDetail; remote:
             </div>
           )}
 
-          <div className="min-h-64 flex-1">
+          {/* Na conversa, altura fixa só para o iframe; texto ocupa o que precisa. */}
+          <div className={cn(compact ? showHtml && 'h-[60vh] min-h-64' : 'min-h-64 flex-1')}>
             {showHtml ? (
               <EmailFrame html={detail.html!} remoteImages={remote} title={`Conteúdo: ${detail.subject ?? 'sem assunto'}`} />
             ) : detail.text ? (

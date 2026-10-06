@@ -155,14 +155,17 @@ export const mockApi = {
   async getThread(id: string): Promise<Thread> {
     await delay();
 
-    const threadMessages = messagesState.filter((m) => m.thread_id === id);
+    // Como a API: mais antiga primeiro; assunto normalizado (sem Re:/Fwd:).
+    const threadMessages = messagesState
+      .filter((m) => m.thread_id === id)
+      .sort((a, b) => a.received_at - b.received_at);
     if (threadMessages.length === 0) {
       throw createError(404, 'not_found', 'Thread não encontrada');
     }
 
     return {
       id,
-      subject: threadMessages[0].subject,
+      subject: threadMessages[0].subject?.replace(/^\s*((re|fwd?|enc|res)\s*:\s*)+/i, '').toLowerCase() ?? null,
       messages: threadMessages,
     };
   },

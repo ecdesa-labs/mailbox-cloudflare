@@ -7,7 +7,7 @@ const todayMs = today.getTime();
 
 // Datas: hoje, esta semana, meses atrás
 const hourAgo = now - 3600000;
-const twoDaysAgo = now - 2 * 86400000;
+const halfHourAgo = now - 1800000;
 const oneWeekAgo = now - 7 * 86400000;
 const twoMonthsAgo = now - 60 * 86400000;
 
@@ -54,7 +54,7 @@ export const messages: ListItem[] = [
   // 1. Texto puro, não lido, para contato@exemplo.com.br
   {
     id: '01M44NRD000000000000000101',
-    thread_id: 'thread001',
+    thread_id: '01M44NRD00000000000000T001',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'João da Silva', addr: 'joao@cliente.com.br' },
@@ -70,14 +70,14 @@ export const messages: ListItem[] = [
   // 2. Resposta na mesma thread
   {
     id: '01M44NRD000000000000000102',
-    thread_id: 'thread001',
+    thread_id: '01M44NRD00000000000000T001',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'Maria Costa', addr: 'maria@cliente.com.br' },
     subject: 'Re: Orçamento de outubro',
     snippet: 'Perfeito! Vamos prosseguir com a proposta...',
-    received_at: twoDaysAgo,
-    is_read: true,
+    received_at: halfHourAgo,
+    is_read: false,
     is_starred: false,
     has_attachments: false,
     folder: 'inbox',
@@ -86,7 +86,7 @@ export const messages: ListItem[] = [
   // 3. HTML com imagem inline
   {
     id: '01M44NRD000000000000000103',
-    thread_id: 'thread002',
+    thread_id: '01M44NRD00000000000000T002',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'Newsletter', addr: 'news@empresa.com.br' },
@@ -102,7 +102,7 @@ export const messages: ListItem[] = [
   // 4. Com imagens remotas bloqueadas
   {
     id: '01M44NRD000000000000000104',
-    thread_id: 'thread003',
+    thread_id: '01M44NRD00000000000000T003',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'Marketing', addr: 'marketing@empresa.com.br' },
@@ -118,7 +118,7 @@ export const messages: ListItem[] = [
   // 5. Anexo grande
   {
     id: '01M44NRD000000000000000105',
-    thread_id: 'thread004',
+    thread_id: '01M44NRD00000000000000T004',
     domain: 'exemplo.com.br',
     identity: 'financeiro@exemplo.com.br',
     from: { name: 'Contabilidade', addr: 'ctr@empresa.com.br' },
@@ -134,7 +134,7 @@ export const messages: ListItem[] = [
   // 6. Modo leve (partial)
   {
     id: '01M44NRD000000000000000106',
-    thread_id: 'thread005',
+    thread_id: '01M44NRD00000000000000T005',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'Sistema', addr: 'backup@empresa.com.br' },
@@ -150,7 +150,7 @@ export const messages: ListItem[] = [
   // 7. Com estrela, já lida, em pessoal.dev
   {
     id: '01M44NRD000000000000000107',
-    thread_id: 'thread006',
+    thread_id: '01M44NRD00000000000000T006',
     domain: 'pessoal.dev',
     identity: 'github@pessoal.dev',
     from: { name: 'GitHub', addr: 'noreply@github.com' },
@@ -166,7 +166,7 @@ export const messages: ListItem[] = [
   // 8. Em archive
   {
     id: '01M44NRD000000000000000108',
-    thread_id: 'thread007',
+    thread_id: '01M44NRD00000000000000T007',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'Antigo', addr: 'antigo@cliente.com.br' },
@@ -182,7 +182,7 @@ export const messages: ListItem[] = [
   // 9. Em trash
   {
     id: '01M44NRD000000000000000109',
-    thread_id: 'thread008',
+    thread_id: '01M44NRD00000000000000T008',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'Spam', addr: 'unwanted@spam.com' },
@@ -198,7 +198,7 @@ export const messages: ListItem[] = [
   // 10. Em spam
   {
     id: '01M44NRD000000000000000110',
-    thread_id: 'thread009',
+    thread_id: '01M44NRD00000000000000T009',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'Unknown', addr: 'unknown@phishing.net' },
@@ -214,7 +214,7 @@ export const messages: ListItem[] = [
   // 11. Com from: null e subject: null
   {
     id: '01M44NRD000000000000000111',
-    thread_id: 'thread010',
+    thread_id: '01M44NRD00000000000000T010',
     domain: 'pessoal.dev',
     identity: 'github@pessoal.dev',
     from: null,
@@ -252,7 +252,7 @@ export const messages: ListItem[] = [
 export const messageDetails: Record<string, MessageDetail> = {
   '01M44NRD000000000000000101': {
     id: '01M44NRD000000000000000101',
-    thread_id: 'thread001',
+    thread_id: '01M44NRD00000000000000T001',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'João da Silva', addr: 'joao@cliente.com.br' },
@@ -279,7 +279,7 @@ export const messageDetails: Record<string, MessageDetail> = {
   },
   '01M44NRD000000000000000103': {
     id: '01M44NRD000000000000000103',
-    thread_id: 'thread002',
+    thread_id: '01M44NRD00000000000000T002',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'Newsletter', addr: 'news@empresa.com.br' },
@@ -316,7 +316,7 @@ export const messageDetails: Record<string, MessageDetail> = {
   },
   '01M44NRD000000000000000104': {
     id: '01M44NRD000000000000000104',
-    thread_id: 'thread003',
+    thread_id: '01M44NRD00000000000000T003',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'Marketing', addr: 'marketing@empresa.com.br' },
@@ -343,7 +343,7 @@ export const messageDetails: Record<string, MessageDetail> = {
   },
   '01M44NRD000000000000000105': {
     id: '01M44NRD000000000000000105',
-    thread_id: 'thread004',
+    thread_id: '01M44NRD00000000000000T004',
     domain: 'exemplo.com.br',
     identity: 'financeiro@exemplo.com.br',
     from: { name: 'Contabilidade', addr: 'ctr@empresa.com.br' },
@@ -380,7 +380,7 @@ export const messageDetails: Record<string, MessageDetail> = {
   },
   '01M44NRD000000000000000110': {
     id: '01M44NRD000000000000000110',
-    thread_id: 'thread009',
+    thread_id: '01M44NRD00000000000000T009',
     domain: 'exemplo.com.br',
     identity: 'contato@exemplo.com.br',
     from: { name: 'Unknown', addr: 'unknown@phishing.net' },
