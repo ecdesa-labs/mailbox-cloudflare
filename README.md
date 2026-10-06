@@ -118,8 +118,17 @@ verificar o domínio no **Email Sending**:
 2. Confira que o DMARC do domínio continua como você quer (ex.: `p=reject`):
    o DKIM assina como o próprio domínio, então o alinhamento passa.
 
-O remetente é sempre uma identidade do domínio (criada automaticamente
-quando um endereço recebe o primeiro email). Uma resposta sai pela
+O remetente é sempre uma identidade do domínio. Ela nasce quando um
+endereço recebe o primeiro email, ou com:
+
+```bash
+just email-address novo@exemplo.com.br "Nome de exibição"
+```
+
+que cria a rota do endereço no Email Routing (para a resposta chegar) e a
+identidade (para ele aparecer no **De**). Sem catch-all, só entra email para
+endereços com rota: use esse comando antes de mandar de um endereço novo.
+Rodar de novo é seguro; o nome só muda se for informado. Uma resposta sai pela
 identidade que recebeu a original e nunca por outro domínio. A cópia do que
 foi enviado fica no R2 e em **Enviados**, na mesma thread.
 

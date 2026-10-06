@@ -148,6 +148,11 @@ email-route ADDRESS:
         --name "mailbox: $1" --match-type literal --match-field to --match-value "$1" \
         --action-type worker --action-value "$MAILBOX_WORKER"
 
+# Libera um endereço novo: rota no Email Routing + identidade no De do compositor.
+#   just email-address novo@exemplo.com.br "Nome de exibição"
+email-address *ARGS:
+    python3 scripts/email_address.py "$@"
+
 # Manda todo endereço dos domínios da instância para o Worker
 email-catchall:
     #!/usr/bin/env bash
