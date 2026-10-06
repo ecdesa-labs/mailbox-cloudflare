@@ -82,4 +82,7 @@ await js(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'?',bubbles:true
 await sleep(800);
 await shot('atalhos');
 
-ws.close(); browser.kill();
+// O executável costuma ser um script que lança o navegador: matar o processo
+// filho não fecha o navegador (e a porta de depuração ficaria ocupada).
+await Promise.race([cdp('Browser.close').catch(() => {}), sleep(2000)]);
+ws.close();
