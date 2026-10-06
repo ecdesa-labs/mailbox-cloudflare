@@ -273,10 +273,23 @@ e por isso são testados nativamente, sem Cloudflare.
 | 5 | API de leitura com paginação por cursor | ✅ |
 | 6 | Autenticação com Cloudflare Access | ✅ |
 | 7 | Busca, flags, pastas, ações em lote, regras de roteamento | ✅ |
-| 8 | Responder e enviar (Email Sending) | |
+| 8 | Responder e enviar (Cloudflare Email Sending) | ⏸ adiado: exige o plano Workers Paid |
 | 9 | Retenção, métricas, logs estruturados, OpenAPI | ✅ |
 
-O front (Next.js estático) é desenvolvido em paralelo.
+### Front
+
+Next.js estático em `mailbox/web`, servido pelo mesmo Worker.
+
+| Fase | Entrega | Estado |
+|---|---|---|
+| 1 | Shell, design system, `lib/api` com modo mock | ✅ |
+| 2 | Lista: busca, seleção em lote, ações com desfazer | ✅ |
+| 3 | Leitor: HTML isolado, imagens remotas sob demanda, anexos | ✅ |
+| 4 | Threads: conversa agrupada, mensagens recolhíveis | |
+| 5 | Atalhos de teclado e ajuda (`?`) | |
+| 6 | Compor e responder | ⏸ adiado junto com a fase 8 do back (envio) |
+| 7 | Tela de regras de roteamento | |
+| 8 | Polimento para celular | |
 
 ### Melhorias futuras
 
