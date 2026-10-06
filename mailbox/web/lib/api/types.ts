@@ -141,7 +141,8 @@ export interface ApiError {
       | 'internal'
       | 'unavailable'
       | 'rejected'
-      | 'rate_limited';
+      | 'rate_limited'
+      | 'not_allowed';
     message: string;
   };
 }
@@ -163,7 +164,10 @@ export class ApiRequestError extends Error {
       | 'internal'
       | 'unavailable'
       | 'rejected'
-      | 'rate_limited' = 'internal'
+      | 'rate_limited'
+      | 'not_allowed' = 'internal',
+    /** Só em `not_allowed`: o email com que a pessoa entrou pelo Access. */
+    public email?: string
   ) {
     super(message);
     this.name = 'ApiRequestError';

@@ -44,15 +44,17 @@ class ApiClient {
     if (!res.ok) {
       let code: ConstructorParameters<typeof ApiRequestError>[2] = res.status === 401 ? 'unauthorized' : res.status >= 500 ? 'unavailable' : 'internal';
       let message = res.status === 401 ? 'Sua sessão expirou' : 'Não foi possível concluir a solicitação.';
+      let email: string | undefined;
       try {
-        const data = (await res.json()) as { error?: { code?: typeof code; message?: string } };
+        const data = (await res.json()) as { error?: { code?: typeof code; message?: string; email?: string } };
         code = data.error?.code ?? code;
         message = data.error?.message ?? message;
+        email = data.error?.email;
       } catch {
         code = 'unavailable';
         message = 'O serviço está temporariamente indisponível.';
       }
-      throw new ApiRequestError(message, res.status, code);
+      throw new ApiRequestError(message, res.status, code, email);
     }
 
     // 204 (ex.: DELETE /api/rules/:id) não tem corpo.

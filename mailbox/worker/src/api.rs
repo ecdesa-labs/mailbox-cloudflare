@@ -468,6 +468,23 @@ pub async fn authorize(req: &Request, env: &Env) -> std::result::Result<Identity
                     .unwrap_or_else(|_| Response::empty().unwrap().with_status(503)),
             )
         }
+        // Login válido do Access, mas o email não está em MAILBOX_ALLOWED_EMAILS:
+        // diz à própria pessoa com que email ela entrou (o resto fica genérico).
+        Err(AuthError::NotAllowed(email)) => {
+            crate::obs::event(
+                env,
+                crate::obs::Level::Warn,
+                "auth",
+                json!({ "outcome": "not_allowed" }),
+            );
+            Err(Response::from_json(&json!({ "error": {
+                "code": "not_allowed",
+                "message": "este email não tem acesso a esta caixa",
+                "email": email,
+            } }))
+            .map(|r| r.with_status(403))
+            .unwrap_or_else(|_| Response::empty().unwrap().with_status(403)))
+        }
         Err(e) => {
             crate::obs::event(
                 env,

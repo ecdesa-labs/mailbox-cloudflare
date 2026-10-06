@@ -254,9 +254,9 @@ appears in the profile menu (top right corner).
   mailbox refuses any login that isn't that email, even if the Access policy
   lets it through. It's a second lock.
 - If the email doesn't match the account's, **you're locked out**: the Access
-  login works, but right after signing in the mailbox shows "Sua sessão
-  expirou" (your session expired) and stays there. Fix it with the
-  `just configure` above and `just deploy`.
+  login works, but the mailbox shows "Este email não tem acesso a esta caixa"
+  (this email has no access to this mailbox), with the email you signed in
+  with. Fix it with the `just configure` above and `just deploy`.
 - If you ever let someone else in through the Access policy, add their email
   too by repeating the option: `--allowed-email you@… --allowed-email them@…`.
 
@@ -366,7 +366,7 @@ Trash and spam are deleted for good 30 days after landing there.
 |---|---|
 | `just bootstrap` fails to create the bucket | R2 wasn't enabled (step 1.3). |
 | The mailbox opens but shows a loading error (and `/api/me` says "autenticação não configurada") | Step 4.2 is missing (team and AUD), or the deploy after it. |
-| Right after signing in, the mailbox shows "Sua sessão expirou" (session expired) and stays there | `--allowed-email` isn't your Cloudflare account email (see 4.2). |
+| Right after signing in, the mailbox shows "Este email não tem acesso a esta caixa" (no access) | `--allowed-email` isn't your Cloudflare account email (see 4.2). The notice shows which email you signed in with. |
 | The Access login doesn't show up | Access wasn't turned on for the Worker (step 4.1). |
 | Email sent to the domain doesn't arrive | The address has no route: run `just email-address` for it. Check with `just email-status`. |
 | `email-enable` is refused | Null MX or SPF `-all` on the domain (see 5.1). |

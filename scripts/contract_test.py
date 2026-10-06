@@ -343,7 +343,6 @@ def verify_auth(api: Api, access: FakeAccess) -> None:
         "aud de outra aplicação": access.token(aud=["outra"]),
         "iss de outro time": access.token(iss="https://outro.cloudflareaccess.com"),
         "type org": access.token(type="org"),
-        "email fora da lista": access.token(email="intruso@x.com"),
         "payload adulterado": f"{head}.{forged}.{sig}",
         "alg none": access.token(alg="none", sign=False),
         "kid desconhecido": access.token(kid="k9"),
@@ -352,6 +351,12 @@ def verify_auth(api: Api, access: FakeAccess) -> None:
         for path in ("/api/me", "/api/messages"):
             s, body = api.as_(token).json(path)
             check(s == 401 and body.get("error", {}).get("code") == "unauthorized", f"{what}: {path} -> 401")
+    # Login válido, email fora da lista: 403 próprio, com o email (a tela explica).
+    for path in ("/api/me", "/api/messages"):
+        s, body = api.as_(access.token(email="intruso@x.com")).json(path)
+        err = body.get("error", {})
+        check(s == 403 and err.get("code") == "not_allowed" and err.get("email") == "intruso@x.com",
+              f"email fora da lista: {path} -> 403 not_allowed com o email")
 
 
 def verify(api: Api, raws: dict[str, bytes]) -> None:

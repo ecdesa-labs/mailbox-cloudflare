@@ -257,9 +257,9 @@ associated with the email …"*. No painel, ele também aparece no menu do perfi
   qualquer login que não seja desse email, mesmo que a política do Access
   deixe passar. É uma segunda trava.
 - Se o email não bater com o da conta, **você fica de fora**: o login do
-  Access funciona, mas a caixa mostra "Sua sessão expirou" logo depois de
-  entrar, e não sai disso. Corrija com o `just configure` acima e
-  `just deploy`.
+  Access funciona, mas a caixa mostra "Este email não tem acesso a esta
+  caixa", com o email com que você entrou. Corrija com o `just configure`
+  acima e `just deploy`.
 - Se um dia liberar outra pessoa na política do Access, inclua o email dela
   também, repetindo a opção: `--allowed-email voce@… --allowed-email ela@…`.
 
@@ -369,7 +369,7 @@ Lixeira e spam são apagados de vez 30 dias depois de irem para lá.
 |---|---|
 | `just bootstrap` falha ao criar o bucket | O R2 não foi ativado (passo 1.3). |
 | A caixa abre, mas mostra erro ao carregar (e `/api/me` responde "autenticação não configurada") | Falta o passo 4.2 (team e AUD), ou o deploy depois dele. |
-| Logo depois de entrar, a caixa mostra "Sua sessão expirou" e não sai disso | O `--allowed-email` não é o email da conta Cloudflare (veja 4.2). |
+| Logo depois de entrar, a caixa mostra "Este email não tem acesso a esta caixa" | O `--allowed-email` não é o email da conta Cloudflare (veja 4.2). O aviso mostra com que email você entrou. |
 | O login do Access não aparece | O Access não foi ligado no Worker (passo 4.1). |
 | Email enviado para o domínio não chega | O endereço não tem rota: rode `just email-address` para ele. Confira com `just email-status`. |
 | `email-enable` recusado | Null MX ou SPF `-all` no domínio (veja 5.1). |

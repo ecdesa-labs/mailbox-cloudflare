@@ -20,7 +20,8 @@
         "summary": "Identidade autenticada pelo Access",
         "responses": {
           "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } } },
-          "401": { "$ref": "#/components/responses/Error" }
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
         }
       }
     },
@@ -38,7 +39,8 @@
             "type": "object", "required": ["items"], "additionalProperties": false,
             "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Domain" } } }
           } } } },
-          "401": { "$ref": "#/components/responses/Error" }
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
         }
       }
     },
@@ -56,7 +58,8 @@
         "responses": {
           "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Page" } } } },
           "400": { "$ref": "#/components/responses/Error" },
-          "401": { "$ref": "#/components/responses/Error" }
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
         }
       },
       "post": {
@@ -213,8 +216,9 @@
         "properties": { "error": {
           "type": "object", "required": ["code", "message"], "additionalProperties": false,
           "properties": {
-            "code": { "type": "string", "enum": ["bad_request", "unauthorized", "forbidden", "not_found", "unsupported_media_type", "internal", "unavailable", "rejected", "rate_limited"] },
-            "message": { "type": "string" }
+            "code": { "type": "string", "enum": ["bad_request", "unauthorized", "forbidden", "not_found", "unsupported_media_type", "internal", "unavailable", "rejected", "rate_limited", "not_allowed"] },
+            "message": { "type": "string" },
+            "email": { "type": "string", "description": "Só em not_allowed (403): o email com que a pessoa entrou pelo Access" }
           }
         } }
       },
