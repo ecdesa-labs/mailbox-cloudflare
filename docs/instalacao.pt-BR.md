@@ -243,11 +243,25 @@ tudo até o login estar configurado (Parte 4). Isso é proposital.
 ### 4.2 Passe esses valores para o projeto e publique de novo
 
 ```bash
-just configure --access-team minhaempresa.cloudflareaccess.com --access-aud <AUD copiado> --allowed-email voce@exemplo.com
+just configure --access-team minhaempresa.cloudflareaccess.com --access-aud <AUD copiado> --allowed-email <email da sua conta Cloudflare>
 just deploy
 ```
 
-`--allowed-email` é opcional: é uma segunda trava, além da política do Access.
+**Qual email vai em `--allowed-email`:** o mesmo com que você entra no painel
+da Cloudflare (o email da conta). É ele que o Access informa à caixa depois do
+login. Para conferir, rode `just login`: o terminal mostra *"logged in …
+associated with the email …"*. No painel, ele também aparece no menu do perfil
+(canto superior direito).
+
+- É opcional: sem ele, vale só a política do Access. Com ele, a caixa recusa
+  qualquer login que não seja desse email, mesmo que a política do Access
+  deixe passar. É uma segunda trava.
+- Se o email não bater com o da conta, **você fica de fora**: o login do
+  Access funciona, mas a caixa mostra "Sua sessão expirou" logo depois de
+  entrar, e não sai disso. Corrija com o `just configure` acima e
+  `just deploy`.
+- Se um dia liberar outra pessoa na política do Access, inclua o email dela
+  também, repetindo a opção: `--allowed-email voce@… --allowed-email ela@…`.
 
 > **Por quê:** o Access pede o login antes de chegar à caixa, e o Worker
 > confere de novo, sozinho, se o login é válido e veio do seu Access. Se uma
@@ -355,6 +369,7 @@ Lixeira e spam são apagados de vez 30 dias depois de irem para lá.
 |---|---|
 | `just bootstrap` falha ao criar o bucket | O R2 não foi ativado (passo 1.3). |
 | A caixa abre, mas mostra erro ao carregar (e `/api/me` responde "autenticação não configurada") | Falta o passo 4.2 (team e AUD), ou o deploy depois dele. |
+| Logo depois de entrar, a caixa mostra "Sua sessão expirou" e não sai disso | O `--allowed-email` não é o email da conta Cloudflare (veja 4.2). |
 | O login do Access não aparece | O Access não foi ligado no Worker (passo 4.1). |
 | Email enviado para o domínio não chega | O endereço não tem rota: rode `just email-address` para ele. Confira com `just email-status`. |
 | `email-enable` recusado | Null MX ou SPF `-all` no domínio (veja 5.1). |

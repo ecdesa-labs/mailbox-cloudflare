@@ -244,12 +244,25 @@ hasta que el inicio de sesión esté configurado (Parte 4). Es intencional.
 ### 4.2 Pasa esos valores al proyecto y publica de nuevo
 
 ```bash
-just configure --access-team miempresa.cloudflareaccess.com --access-aud <AUD copiado> --allowed-email tu@ejemplo.com
+just configure --access-team miempresa.cloudflareaccess.com --access-aud <AUD copiado> --allowed-email <correo de tu cuenta de Cloudflare>
 just deploy
 ```
 
-`--allowed-email` es opcional: es un segundo candado, además de la política de
-Access.
+**Qué correo va en `--allowed-email`:** el mismo con el que entras al panel de
+Cloudflare (el correo de la cuenta). Es el que Access le informa al buzón
+después del inicio de sesión. Para comprobarlo, ejecuta `just login`: la
+terminal muestra *"logged in … associated with the email …"*. En el panel,
+también aparece en el menú del perfil (esquina superior derecha).
+
+- Es opcional: sin él, solo vale la política de Access. Con él, el buzón
+  rechaza cualquier inicio de sesión que no sea de ese correo, aunque la
+  política de Access lo deje pasar. Es un segundo candado.
+- Si el correo no coincide con el de la cuenta, **te quedas fuera**: el inicio
+  de sesión de Access funciona, pero justo después de entrar el buzón muestra
+  "Sua sessão expirou" (tu sesión expiró) y no sale de ahí. Corrígelo con el
+  `just configure` de arriba y `just deploy`.
+- Si algún día dejas entrar a otra persona en la política de Access, añade
+  también su correo repitiendo la opción: `--allowed-email tu@… --allowed-email ella@…`.
 
 > **Por qué:** Access pide el inicio de sesión antes de llegar al buzón, y el
 > Worker comprueba de nuevo, por su cuenta, que el inicio de sesión es válido
@@ -360,6 +373,7 @@ ahí.
 |---|---|
 | `just bootstrap` falla al crear el bucket | R2 no se activó (paso 1.3). |
 | El buzón abre pero muestra un error al cargar (y `/api/me` responde "autenticação não configurada") | Falta el paso 4.2 (team y AUD), o el despliegue posterior. |
+| Justo después de entrar, el buzón muestra "Sua sessão expirou" (sesión expirada) y no sale de ahí | `--allowed-email` no es el correo de tu cuenta de Cloudflare (ver 4.2). |
 | No aparece el inicio de sesión de Access | Access no se activó en el Worker (paso 4.1). |
 | Un correo enviado al dominio no llega | La dirección no tiene ruta: ejecuta `just email-address` para ella. Compruébalo con `just email-status`. |
 | `email-enable` se rechaza | Null MX o SPF `-all` en el dominio (ver 5.1). |

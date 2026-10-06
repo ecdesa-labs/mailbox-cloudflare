@@ -240,12 +240,25 @@ everything until the login is configured (Part 4). That's on purpose.
 ### 4.2 Give those values to the project and deploy again
 
 ```bash
-just configure --access-team mycompany.cloudflareaccess.com --access-aud <copied AUD> --allowed-email you@example.com
+just configure --access-team mycompany.cloudflareaccess.com --access-aud <copied AUD> --allowed-email <your Cloudflare account email>
 just deploy
 ```
 
-`--allowed-email` is optional: it's a second lock, on top of the Access
-policy.
+**Which email goes in `--allowed-email`:** the one you use to log in to the
+Cloudflare dashboard (the account email). That's the email Access hands to
+the mailbox after login. To check it, run `just login`: the terminal shows
+*"logged in … associated with the email …"*. In the dashboard, it also
+appears in the profile menu (top right corner).
+
+- It's optional: without it, only the Access policy applies. With it, the
+  mailbox refuses any login that isn't that email, even if the Access policy
+  lets it through. It's a second lock.
+- If the email doesn't match the account's, **you're locked out**: the Access
+  login works, but right after signing in the mailbox shows "Sua sessão
+  expirou" (your session expired) and stays there. Fix it with the
+  `just configure` above and `just deploy`.
+- If you ever let someone else in through the Access policy, add their email
+  too by repeating the option: `--allowed-email you@… --allowed-email them@…`.
 
 > **Why:** Access asks for the login before anyone reaches the mailbox, and
 > the Worker independently checks that the login is valid and came from your
@@ -353,6 +366,7 @@ Trash and spam are deleted for good 30 days after landing there.
 |---|---|
 | `just bootstrap` fails to create the bucket | R2 wasn't enabled (step 1.3). |
 | The mailbox opens but shows a loading error (and `/api/me` says "autenticação não configurada") | Step 4.2 is missing (team and AUD), or the deploy after it. |
+| Right after signing in, the mailbox shows "Sua sessão expirou" (session expired) and stays there | `--allowed-email` isn't your Cloudflare account email (see 4.2). |
 | The Access login doesn't show up | Access wasn't turned on for the Worker (step 4.1). |
 | Email sent to the domain doesn't arrive | The address has no route: run `just email-address` for it. Check with `just email-status`. |
 | `email-enable` is refused | Null MX or SPF `-all` on the domain (see 5.1). |
