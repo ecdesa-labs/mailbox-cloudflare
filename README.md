@@ -1,19 +1,20 @@
 # mailbox-cloudflare
 
-Caixa de email pessoal que roda inteira na Cloudflare: recebe, guarda, indexa e
-(em breve) responde emails de um ou mais domínios seus, sem servidor de email
+Caixa de email pessoal que roda inteira na Cloudflare: recebe, guarda, indexa,
+envia e responde emails de um ou mais domínios seus, sem servidor de email
 próprio e sem provedor pago de caixa postal.
 
-> **Estado:** em desenvolvimento. O projeto já recebe, processa e indexa
-> emails de verdade (R2 + D1, com threads e busca); a API de leitura e o
-> front entram nas próximas fases (veja [Roadmap](#roadmap)).
+> **Estado:** em desenvolvimento. Recebe, processa e indexa emails de
+> verdade (R2 + D1, com threads e busca), tem API e front para ler,
+> organizar, escrever e responder (veja [Roadmap](#roadmap)).
 
 ## Proposta
 
 - **Uso próprio.** Um único dono, vários domínios, caixa unificada com visão por domínio.
 - **Só Cloudflare.** Email Routing entrega cada mensagem a um Worker; R2 guarda os
-  arquivos; D1 guarda o índice; Access protege o acesso. Cabe no plano gratuito
-  para volume pessoal (o envio, na Fase 8, exige o plano Workers Paid).
+  arquivos; D1 guarda o índice; Access protege o acesso; Email Sending envia.
+  Receber cabe no plano gratuito para volume pessoal; enviar exige o plano
+  Workers Paid.
 - **O `.eml` bruto é a fonte da verdade.** Tudo o que está no banco é derivado
   dele e pode ser reprocessado a qualquer momento.
 - **Reutilizável.** Domínios, cores e nomes dos recursos ficam num único arquivo
@@ -104,6 +105,26 @@ just email-catchall                     # depois de validar: todos os endereços
 Se o domínio tiver um **Null MX** (`MX 0 .`) ou SPF `v=spf1 -all` (configuração
 de "domínio sem email"), o `email-enable` é recusado: remova o Null MX e troque
 o SPF por `v=spf1 include:_spf.mx.cloudflare.net ~all` no painel antes.
+
+### Enviar emails
+
+Exige o plano **Workers Paid** (US$ 5/mês, com 3.000 envios por mês
+incluídos). O Worker já sai com o binding `send_email` (`MAILER`); falta
+verificar o domínio no **Email Sending**:
+
+1. No painel: **Compute → Email Service → Email Sending → Onboard Domain** e
+   escolha o domínio. A Cloudflare cria o DKIM (`cf-bounce._domainkey`) e o
+   SPF/MX do subdomínio `cf-bounce` (domínio do envelope e dos bounces).
+2. Confira que o DMARC do domínio continua como você quer (ex.: `p=reject`):
+   o DKIM assina como o próprio domínio, então o alinhamento passa.
+
+O remetente é sempre uma identidade do domínio (criada automaticamente
+quando um endereço recebe o primeiro email). Uma resposta sai pela
+identidade que recebeu a original e nunca por outro domínio. A cópia do que
+foi enviado fica no R2 e em **Enviados**, na mesma thread.
+
+Sem o domínio verificado, o envio é recusado (`422`, código
+`E_SENDER_NOT_VERIFIED`).
 
 ### Proteger com o Cloudflare Access
 
@@ -273,7 +294,7 @@ e por isso são testados nativamente, sem Cloudflare.
 | 5 | API de leitura com paginação por cursor | ✅ |
 | 6 | Autenticação com Cloudflare Access | ✅ |
 | 7 | Busca, flags, pastas, ações em lote, regras de roteamento | ✅ |
-| 8 | Responder e enviar (Cloudflare Email Sending) | ⏸ adiado: exige o plano Workers Paid |
+| 8 | Responder e enviar (Cloudflare Email Sending) | ✅ |
 | 9 | Retenção, métricas, logs estruturados, OpenAPI | ✅ |
 
 ### Front
@@ -287,7 +308,7 @@ Next.js estático em `mailbox/web`, servido pelo mesmo Worker.
 | 3 | Leitor: HTML isolado, imagens remotas sob demanda, anexos | ✅ |
 | 4 | Threads: conversa agrupada, mensagens recolhíveis | ✅ |
 | 5 | Atalhos de teclado e ajuda (`?`) | |
-| 6 | Compor e responder | ⏸ adiado junto com a fase 8 do back (envio) |
+| 6 | Compor e responder | ✅ |
 | 7 | Tela de regras de roteamento | |
 | 8 | Polimento para celular | |
 
@@ -314,6 +335,10 @@ Next.js estático em `mailbox/web`, servido pelo mesmo Worker.
 ## Limitações conhecidas
 
 - Email Routing aceita mensagens de até 25 MiB.
+- Email Sending (beta público): até 5 MiB por mensagem e 50 destinatários
+  (Para + Cc); a cota diária começa conservadora e cresce com o uso. O
+  `Message-ID` de quem recebe é gerado pela Cloudflare; a cópia em Enviados
+  usa o id que o serviço devolve. Envio ainda sem anexos.
 - No plano Free, cada invocação tem 10 ms de CPU e 50 sub-requisições
   (R2, D1 e fila contam). Receber e gravar não depende do tamanho (o `.eml`
   vai por stream para o R2). Emails acima de 512 KiB são processados em
