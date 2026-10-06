@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import {
-  Archive, ChevronDown, ChevronLeft, ChevronRight, Inbox, Laptop, Moon, SquarePen, Send,
+  Archive, ChevronDown, ChevronLeft, ChevronRight, Inbox, Keyboard, Laptop, Moon, SquarePen, Send,
   Settings2, ShieldAlert, Sun, Trash2, X, type LucideIcon,
 } from 'lucide-react'
 import { useDomains, useMe } from '@/lib/api/queries'
@@ -29,9 +29,10 @@ interface Props {
   open: boolean
   onClose: () => void
   onCompose: () => void
+  onHelp: () => void
 }
 
-export function Sidebar({ nav, onNavigate, collapsed, onCollapse, open, onClose, onCompose }: Props) {
+export function Sidebar({ nav, onNavigate, collapsed, onCollapse, open, onClose, onCompose, onHelp }: Props) {
   const me = useMe()
   const domains = useDomains()
   const items = domains.data?.items ?? []
@@ -118,6 +119,17 @@ export function Sidebar({ nav, onNavigate, collapsed, onCollapse, open, onClose,
           <NavItem icon={Settings2} label="Regras" collapsed={collapsed} active={false} disabled onClick={() => {}} badge="Em breve" />
           <div className="mt-1 flex items-center gap-1">
             <ThemeToggle collapsed={collapsed} />
+            <button
+              onClick={() => {
+                onHelp()
+                onClose()
+              }}
+              aria-label="Atalhos de teclado (?)"
+              title="Atalhos de teclado (?)"
+              className="hidden rounded-lg p-2.5 text-muted-foreground hover:bg-sidebar-accent md:block"
+            >
+              <Keyboard className="size-4" aria-hidden="true" />
+            </button>
             <button
               onClick={onCollapse}
               aria-label={collapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}

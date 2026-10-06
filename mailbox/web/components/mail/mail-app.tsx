@@ -1,26 +1,32 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ListItem, MessagePatch, SendResult } from '@/lib/api/types'
+import { useMessage } from '@/lib/api/queries'
+import type { Folder, ListItem, MessagePatch, SendResult } from '@/lib/api/types'
 import { Composer, type ComposeInit } from './compose'
 import { MessageList } from './message-list'
 import { useNav } from './nav'
 import { Reader } from './reader'
+import { GO_TO, isTyping, normalizeKey, shortcutFor } from './shortcuts'
+import { ShortcutsHelp } from './shortcuts-help'
 import { Sidebar } from './sidebar'
 import { Toast } from './toast'
 import { useMessageActions, type Undo } from './use-actions'
 
+/** Depois de `g`, quanto tempo a segunda tecla ainda vale. */
+const GO_TO_WINDOW_MS = 1500
+
 /**
- * Shell de 3 painéis. Atalhos (fora de campos de texto): ↑/↓ ou k/j trocam a
- * mensagem aberta, x seleciona a aberta, / vai para a busca, Esc fecha o
- * leitor. Abaixo de 1024 px, lista e leitor alternam; abaixo de 768 px, a
- * barra lateral vira gaveta.
+ * Shell de 3 painéis com os atalhos de teclado (tabela em shortcuts.ts; `?`
+ * mostra a ajuda). Abaixo de 1024 px, lista e leitor alternam; abaixo de
+ * 768 px, a barra lateral vira gaveta.
  */
 export function MailApp() {
   const { state: nav, navigate } = useNav()
   const [collapsed, setCollapsed] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [notice, setNotice] = useState<Undo | null>(null)
+  const [help, setHelp] = useState(false)
   const [compose, setCompose] = useState<(ComposeInit & { key: number }) | null>(null)
   const openCompose = useCallback((init: ComposeInit) => setCompose({ ...init, key: Date.now() }), [])
   const onSent = useCallback((r: SendResult) => {
@@ -62,37 +68,151 @@ export function MailApp() {
     })
   }, [])
 
+  // Detalhe da aberta (mesmo cache do leitor): responder pelo teclado.
+  const open = useMessage(nav.id || null)
+
+  // O handler é registrado uma vez e lê o estado mais recente daqui.
+  const latest = useRef({ nav, selected, notice, compose, help, detail: open.data })
+  latest.current = { nav, selected, notice, compose, help, detail: open.data }
+  const goPending = useRef(0)
+  // Mensagem aberta segundo o teclado: a URL (router do Next) atualiza
+  // depois, e um `j` seguido de `x` rápido não pode agir na anterior.
+  const openId = useRef(nav.id)
+  useEffect(() => {
+    openId.current = nav.id
+  }, [nav.id])
+  const openByKey = useCallback(
+    (id: string) => {
+      openId.current = id
+      navigate({ id }, { replace: true })
+    },
+    [navigate],
+  )
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const t = e.target as HTMLElement | null
-      if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return
+      const s = latest.current
+      // Compositor e ajuda tratam as próprias teclas.
+      if (s.compose || s.help || isTyping(e.target)) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      const key = normalizeKey(e)
+
+      if (goPending.current > Date.now()) {
+        goPending.current = 0
+        const folder = GO_TO[key]
+        if (folder) {
+          e.preventDefault()
+          navigate({ folder, id: '', q: '' })
+        }
+        return
+      }
+      if (key === 'g') {
+        goPending.current = Date.now() + GO_TO_WINDOW_MS
+        return
+      }
+
+      const action = shortcutFor(key)
+      if (!action) return
+      const current = openId.current
       const ids = items.current.map((m) => m.id)
-      const i = nav.id ? ids.indexOf(nav.id) : -1
-      if (e.key === 'ArrowDown' || e.key === 'j') {
-        const next = ids[Math.min(i + 1, ids.length - 1)]
-        if (next && next !== nav.id) {
-          e.preventDefault()
-          navigate({ id: next }, { replace: true })
-        }
-      } else if (e.key === 'ArrowUp' || e.key === 'k') {
-        const prev = ids[Math.max(i - 1, 0)]
-        if (prev && prev !== nav.id) {
-          e.preventDefault()
-          navigate({ id: prev }, { replace: true })
-        }
-      } else if (e.key === 'x' && nav.id) {
-        select([nav.id], !selected.has(nav.id))
-      } else if (e.key === '/') {
+      const i = current ? ids.indexOf(current) : -1
+      // Seleção, se houver; senão, a mensagem aberta.
+      const targets = (): ListItem[] => {
+        const chosen = items.current.filter((m) => s.selected.has(m.id))
+        if (chosen.length) return chosen
+        const open = items.current.find((m) => m.id === current) ?? (s.detail?.id === current ? s.detail : undefined)
+        return open ? [open] : []
+      }
+      const patch = (list: ListItem[], p: MessagePatch) => {
+        if (!list.length) return
         e.preventDefault()
-        document.getElementById('mail-search')?.focus()
-      } else if (e.key === 'Escape' && nav.id) {
-        navigate({ id: '' })
+        void act(list, p).catch(() => {})
+      }
+      const move = (folder: Folder) => {
+        const list = targets().filter((m) => m.folder !== folder)
+        if (!list.length) return
+        e.preventDefault()
+        // A aberta saiu da lista: abre a próxima que ficou (ou a anterior).
+        if (current && list.some((m) => m.id === current)) {
+          const gone = new Set(list.map((m) => m.id))
+          const next =
+            ids.slice(i + 1).find((id) => !gone.has(id)) ?? ids.slice(0, Math.max(i, 0)).reverse().find((id) => !gone.has(id))
+          openByKey(next ?? '')
+        }
+        if (s.selected.size) setSelected(new Set())
+        void act(list, { folder }, { undoable: true }).catch(() => {})
+      }
+
+      switch (action) {
+        case 'next':
+        case 'prev': {
+          const to = ids[action === 'next' ? Math.min(i + 1, ids.length - 1) : Math.max(i - 1, 0)]
+          if (to && to !== current) {
+            e.preventDefault()
+            openByKey(to)
+          }
+          break
+        }
+        case 'close':
+          if (current) {
+            openId.current = ''
+            navigate({ id: '' })
+          }
+          else if (s.selected.size) setSelected(new Set())
+          break
+        case 'search':
+          e.preventDefault()
+          document.getElementById('mail-search')?.focus()
+          break
+        case 'select':
+          if (current) select([current], !s.selected.has(current))
+          break
+        case 'archive':
+          move('archive')
+          break
+        case 'trash':
+          move('trash')
+          break
+        case 'spam':
+          move('spam')
+          break
+        case 'star': {
+          const list = targets()
+          patch(list, { starred: !list.every((m) => m.is_starred) })
+          break
+        }
+        case 'read':
+          patch(targets().filter((m) => !m.is_read), { read: true })
+          break
+        case 'unread':
+          patch(targets().filter((m) => m.is_read), { read: false })
+          break
+        case 'undo':
+          if (s.notice?.undo) {
+            s.notice.undo()
+            setNotice(null)
+          }
+          break
+        case 'compose':
+          e.preventDefault()
+          openCompose({ mode: 'new', domain: s.nav.domain || undefined })
+          break
+        case 'reply':
+        case 'reply-all':
+          if (s.detail && s.detail.id === current) {
+            e.preventDefault()
+            openCompose({ mode: action, original: s.detail })
+          }
+          break
+        case 'help':
+          e.preventDefault()
+          setHelp(true)
+          break
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [nav.id, navigate, select, selected])
+  }, [act, navigate, openByKey, openCompose, select])
 
   // A linha aberta fica visível quando o teclado troca de mensagem.
   useEffect(() => {
@@ -107,6 +227,7 @@ export function MailApp() {
         collapsed={collapsed}
         onCollapse={() => setCollapsed((c) => !c)}
         onCompose={() => openCompose({ mode: 'new', domain: nav.domain || undefined })}
+        onHelp={() => setHelp(true)}
         open={drawer}
         onClose={() => setDrawer(false)}
       />
@@ -126,6 +247,7 @@ export function MailApp() {
       </main>
       {compose && <Composer key={compose.key} init={compose} onClose={() => setCompose(null)} onSent={onSent} />}
       {notice && <Toast notice={notice} onClose={() => setNotice(null)} />}
+      {help && <ShortcutsHelp onClose={() => setHelp(false)} />}
     </div>
   )
 }
