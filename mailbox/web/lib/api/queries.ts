@@ -47,11 +47,12 @@ export function useMessages(folder?: string, domain?: string, q?: string) {
 }
 
 // Single Message
-export function useMessage(id: string | null, enabled: boolean = true) {
+export function useMessage(id: string | null, remoteImages = false) {
   return useQuery({
-    queryKey: queryKeys.message(id || ''),
-    queryFn: () => (id ? apiClient.getMessage(id) : Promise.reject()),
-    enabled: !!id && enabled,
+    // Prefixo `message(id)` continua invalidando as duas versões.
+    queryKey: [...queryKeys.message(id || ''), { remoteImages }],
+    queryFn: () => (id ? apiClient.getMessage(id, remoteImages) : Promise.reject()),
+    enabled: !!id,
   });
 }
 

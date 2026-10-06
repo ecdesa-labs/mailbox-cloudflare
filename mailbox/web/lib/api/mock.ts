@@ -103,7 +103,23 @@ export const mockApi = {
     return { items, next_cursor: nextCursor };
   },
 
-  async getMessage(id: string): Promise<MessageDetail> {
+  /** Imagem de exemplo no lugar do anexo (não há servidor no modo mock). */
+  async attachmentDataUrl(url: string): Promise<string | null> {
+    await delay(100);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60"><rect width="200" height="60" rx="8" fill="#2563EB"/><text x="100" y="37" font-family="sans-serif" font-size="16" fill="white" text-anchor="middle">${url.split('/').pop()}</text></svg>`;
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  },
+
+  async getMessage(id: string, remoteImages = false): Promise<MessageDetail> {
+    const detail = await this.getMessageBase(id);
+    // Como a API: `remote_images=1` devolve data-remote-src como src.
+    if (remoteImages && detail.html) {
+      return { ...detail, html: detail.html.replace(/data-remote-src=/g, 'src=') };
+    }
+    return detail;
+  },
+
+  async getMessageBase(id: string): Promise<MessageDetail> {
     await delay();
 
     const detail = messageDetails[id];

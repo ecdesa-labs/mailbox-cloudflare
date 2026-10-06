@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ListItem } from '@/lib/api/types'
+import type { ListItem, MessagePatch } from '@/lib/api/types'
 import { MessageList } from './message-list'
 import { useNav } from './nav'
 import { Reader } from './reader'
@@ -26,6 +26,15 @@ export function MailApp() {
     items.current = next
   }, [])
   const act = useMessageActions(setNotice)
+
+  const onAct = useCallback(
+    (list: ListItem[], patch: MessagePatch, opts?: { undoable?: boolean }) => {
+      // Se a mensagem aberta sai da lista, fecha o leitor.
+      if (patch.folder && nav.id && list.some((m) => m.id === nav.id)) navigate({ id: '' }, { replace: true })
+      void act(list, patch, opts).catch(() => {})
+    },
+    [act, nav.id, navigate],
+  )
 
   // Seleção vale para a lista atual; trocar de lista limpa.
   const listKey = `${nav.folder}|${nav.folderExplicit}|${nav.domain}|${nav.q}`
@@ -96,13 +105,9 @@ export function MailApp() {
           selected={selected}
           onSelect={select}
           onClearSelection={() => setSelected(new Set())}
-          onAct={(list, patch, opts) => {
-            // Se a mensagem aberta sai da lista, fecha o leitor.
-            if (patch.folder && nav.id && list.some((m) => m.id === nav.id)) navigate({ id: '' }, { replace: true })
-            void act(list, patch, opts).catch(() => {})
-          }}
+          onAct={onAct}
         />
-        <Reader id={nav.id} onBack={() => navigate({ id: '' })} />
+        <Reader id={nav.id} onBack={() => navigate({ id: '' })} onAct={onAct} />
       </main>
       {notice && <Toast notice={notice} onClose={() => setNotice(null)} />}
     </div>

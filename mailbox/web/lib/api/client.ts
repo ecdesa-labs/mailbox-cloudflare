@@ -89,7 +89,7 @@ class ApiClient {
   }
 
   async getMessage(id: string, remoteImages?: boolean): Promise<MessageDetail> {
-    if (USE_MOCK) return mockApi.getMessage(id);
+    if (USE_MOCK) return mockApi.getMessage(id, remoteImages);
 
     const params = new URLSearchParams();
     if (remoteImages !== undefined) params.append('remote_images', remoteImages ? '1' : '0');
@@ -137,3 +137,30 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
+
+/** Imagens inline maiores que isso ficam só como anexo (não embutidas). */
+const INLINE_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Baixa um anexo pela origem do app (com o cookie do Access) e devolve como
+ * `data:`. O HTML do email roda num iframe isolado, que não teria a sessão
+ * para buscar `/api/attachments/...` sozinho. `null` se não der.
+ */
+export async function attachmentDataUrl(url: string): Promise<string | null> {
+  if (USE_MOCK) return mockApi.attachmentDataUrl(url);
+  if (!url.startsWith('/api/attachments/')) return null;
+  try {
+    const res = await fetch(url, { credentials: 'same-origin' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (blob.size > INLINE_MAX_BYTES || !blob.type.startsWith('image/')) return null;
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}

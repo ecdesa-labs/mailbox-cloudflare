@@ -229,8 +229,8 @@ export const messages: ListItem[] = [
   },
   // 12-31: Preenchimento para ter 2 páginas com limit=20
   ...[...Array(20)].map((_, i) => ({
-    id: `01M44NRD00000000000000${111 + i}`,
-    thread_id: `thread${111 + i}`,
+    id: `01M44NRD00000000000000${1111 + i}`, // 26 caracteres, como um ULID
+    thread_id: `01M44NRD00000000000000${2111 + i}`,
     domain: i % 2 === 0 ? 'exemplo.com.br' : 'pessoal.dev',
     identity:
       i % 2 === 0 ? 'contato@exemplo.com.br' : 'github@pessoal.dev',
