@@ -58,6 +58,22 @@
           "400": { "$ref": "#/components/responses/Error" },
           "401": { "$ref": "#/components/responses/Error" }
         }
+      },
+      "post": {
+        "summary": "Envia uma mensagem ou responde a uma (Fase 8)",
+        "description": "Cloudflare Email Sending. 201 assim que a mensagem sai: não repita o pedido (o email sairia de novo). Resposta: in_reply_to = id da original; o remetente precisa ser do domínio dela. 422 = recusada pelo serviço (ex.: domínio não verificado); 502 = falha sem código (não se sabe se saiu).",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SendInput" } } } },
+        "responses": {
+          "201": { "description": "Enviada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SendResult" } } } },
+          "400": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "415": { "$ref": "#/components/responses/Error" },
+          "422": { "$ref": "#/components/responses/Error" },
+          "429": { "$ref": "#/components/responses/Error" },
+          "502": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" }
+        }
       }
     },
     "/api/messages/bulk": {
@@ -197,7 +213,7 @@
         "properties": { "error": {
           "type": "object", "required": ["code", "message"], "additionalProperties": false,
           "properties": {
-            "code": { "type": "string", "enum": ["bad_request", "unauthorized", "forbidden", "not_found", "unsupported_media_type", "internal", "unavailable"] },
+            "code": { "type": "string", "enum": ["bad_request", "unauthorized", "forbidden", "not_found", "unsupported_media_type", "internal", "unavailable", "rejected", "rate_limited"] },
             "message": { "type": "string" }
           }
         } }
@@ -316,6 +332,33 @@
         "properties": {
           "match_address": { "type": "string" }, "action": { "$ref": "#/components/schemas/RuleAction" },
           "folder": { "$ref": "#/components/schemas/Folder" }, "priority": { "type": "integer" }, "enabled": { "type": "boolean" }
+        }
+      },
+      "Recipient": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "object", "required": ["addr"], "additionalProperties": false, "properties": { "name": { "type": ["string", "null"] }, "addr": { "type": "string" } } }
+        ]
+      },
+      "SendInput": {
+        "type": "object", "required": ["from_identity_id", "to", "subject", "text"], "additionalProperties": false,
+        "description": "to + cc: até 50 endereços, sem repetidos. text pode ser vazio só com html.",
+        "properties": {
+          "in_reply_to": { "type": ["string", "null"], "description": "Id da mensagem original" },
+          "from_identity_id": { "$ref": "#/components/schemas/Id" },
+          "to": { "type": "array", "minItems": 1, "maxItems": 50, "items": { "$ref": "#/components/schemas/Recipient" } },
+          "cc": { "type": ["array", "null"], "items": { "$ref": "#/components/schemas/Recipient" } },
+          "subject": { "type": "string", "maxLength": 998 },
+          "text": { "type": "string" },
+          "html": { "type": ["string", "null"] }
+        }
+      },
+      "SendResult": {
+        "type": "object", "required": ["id", "thread_id", "stored"], "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Id" },
+          "thread_id": { "type": ["string", "null"] },
+          "stored": { "type": "string", "enum": ["indexed", "pending", "lost"], "description": "Cópia do enviado: no índice, na fila (aparece em instantes) ou perdida (saiu, mas não foi gravada; só no log)." }
         }
       }
     }

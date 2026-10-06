@@ -116,8 +116,9 @@ where
             .ensure_identity(domain_id, &envelope_to, self.ids.identity_id(now))
             .await?;
 
-        // Regras só na primeira vez: reprocessar não desfaz o que o usuário mudou.
-        let rules = if is_new {
+        // Regras só na primeira vez (reprocessar não desfaz o que o usuário
+        // mudou) e só no que chega: o que enviamos vai para `sent`.
+        let rules = if is_new && !job.sent {
             Rule::evaluate(&self.index.rules().await?, &envelope_to)
         } else {
             Default::default()
@@ -157,10 +158,20 @@ where
             size_bytes: raw.len() as u64,
             received_at,
             date_hdr: parsed.date_ms.and_then(|ms| UnixMs::new(ms).ok()),
-            folder: rules.folder.unwrap_or(Folder::Inbox),
-            is_read: rules.mark_read,
+            folder: if job.sent {
+                Folder::Sent
+            } else {
+                rules.folder.unwrap_or(Folder::Inbox)
+            },
+            is_read: job.sent || rules.mark_read,
             is_starred: false,
-            auth: trusted_auth(&parsed),
+            // Num enviado, um `Authentication-Results` só poderia ter vindo de
+            // quem escreveu a mensagem: não vale nada.
+            auth: if job.sent {
+                AuthResults::default()
+            } else {
+                trusted_auth(&parsed)
+            },
             deleted_at: rules.reject.then_some(now),
         };
         let thread = Thread::new(

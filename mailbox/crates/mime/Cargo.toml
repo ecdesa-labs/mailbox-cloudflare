@@ -12,3 +12,5 @@ mail-parser = "0.11"
 ammonia = "4"
 # Mesma versão usada pelo ammonia: a segunda passada no DOM usa o rcdom dele.
 html5ever = "0.40"
+# Monta o .eml dos enviados. Sem `gethostname` (não existe em wasm).
+mail-builder = { version = "1", default-features = false }

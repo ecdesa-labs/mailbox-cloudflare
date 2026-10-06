@@ -12,6 +12,9 @@ pub struct WireIngestJob {
     pub envelope_to: String,
     pub received_at: i64,
     pub size: u64,
+    /// Ausente nos jobs de antes do envio (Fase 8) = recebido.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sent: bool,
 }
 
 impl From<&IngestJob> for WireIngestJob {
@@ -23,6 +26,7 @@ impl From<&IngestJob> for WireIngestJob {
             envelope_to: j.envelope_to.clone(),
             received_at: j.received_at,
             size: j.size,
+            sent: j.sent,
         }
     }
 }
@@ -36,6 +40,7 @@ impl From<WireIngestJob> for IngestJob {
             envelope_to: j.envelope_to,
             received_at: j.received_at,
             size: j.size,
+            sent: j.sent,
         }
     }
 }

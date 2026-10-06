@@ -2,12 +2,13 @@
 //! Erros: `{ "error": { "code", "message" } }` com status coerente.
 
 use mailbox_adapters_cf::CryptoIds;
-use mailbox_adapters_cf::{D1Index, JwksVerifier, R2Blobs, WorkerClock};
+use mailbox_adapters_cf::{CfMailer, D1Index, JwksVerifier, QueueIngest, R2Blobs, WorkerClock};
 use mailbox_application::{
     apply_rule_patch, authenticate, content_disposition, is_inline_safe, list_page, rule_from_json,
     rule_json, AccessConfig, AttachmentMeta, AuthError, BlobStore, BulkPatch, Clock, DomainSummary,
     IdGenerator, Identity, ListItem, ListQuery, MailWriter, MessageDetail, MessagePatch, Person,
-    QueryError, ReadModel, RuleStore, ThreadView,
+    ProcessMessage, QueryError, ReadModel, RuleStore, SendError, SendMessage, SendRequest, Stored,
+    ThreadView,
 };
 use mailbox_domain::{AttachmentId, MessageId, RuleId, ThreadId};
 use mailbox_mime::{restore_remote_images, REMOTE_SRC_ATTR};
@@ -55,6 +56,9 @@ pub fn router(identity: Option<Identity>) -> Router<'static, Option<Identity>> {
         })
         .post_async("/api/messages/bulk", |req, ctx| async move {
             handle(bulk(req, &ctx.env).await)
+        })
+        .post_async("/api/messages", |req, ctx| async move {
+            handle(send_message(req, &ctx.env).await)
         })
         .get_async("/api/rules", |_, ctx| async move {
             handle(list_rules(&ctx.env).await)
@@ -113,6 +117,23 @@ impl From<mailbox_application::PortError> for ApiError {
             status: 503,
             code: "unavailable",
             message: e.0,
+        }
+    }
+}
+
+impl From<SendError> for ApiError {
+    fn from(e: SendError) -> Self {
+        let (status, code) = match &e {
+            SendError::Invalid(q) => return q.clone().into(),
+            SendError::NotFound(_) => (404, "not_found"),
+            SendError::Rejected { .. } => (422, "rejected"),
+            SendError::RateLimited(_) => (429, "rate_limited"),
+            SendError::Unavailable(_) => (502, "unavailable"),
+        };
+        Self {
+            status,
+            code,
+            message: e.to_string(),
         }
     }
 }
@@ -578,4 +599,73 @@ async fn delete_rule(env: &Env, id: Option<&String>) -> std::result::Result<Resp
         return Err(ApiError::not_found("regra"));
     }
     Ok(Response::empty()?.with_status(204))
+}
+
+/// Envio e resposta (docs seção 6.4, Fase 8). Responde 201 assim que a
+/// mensagem sai; o destino da cópia (índice, fila ou perdida) só vai para
+/// o log, porque repetir o pedido mandaria o email de novo.
+async fn send_message(mut req: Request, env: &Env) -> std::result::Result<Response, ApiError> {
+    let request = SendRequest::from_json(&json_body(&mut req).await?)?;
+    let binding = env.send_email("MAILER").map_err(|_| ApiError {
+        status: 503,
+        code: "unavailable",
+        message: "envio não configurado (binding MAILER)".into(),
+    })?;
+    let (db, bucket, queue) = (env.d1("DB")?, env.bucket("MAIL")?, env.queue("INGEST")?);
+    let index = D1Index { db: &db };
+    let blobs = R2Blobs { bucket: &bucket };
+    let process = ProcessMessage {
+        blobs: &blobs,
+        index: &index,
+        clock: &WorkerClock,
+        ids: &CryptoIds,
+        full_max_bytes: crate::var_u64(env, "MAILBOX_FULL_MAX_BYTES", 512 * 1024),
+        max_attachments: crate::var_u64(env, "MAILBOX_MAX_ATTACHMENTS", 30) as usize,
+    };
+    let uc = SendMessage {
+        mailer: &CfMailer { binding: &binding },
+        index: &index,
+        raw: &blobs,
+        queue: &QueueIngest { queue: &queue },
+        process: &process,
+    };
+    let reply = request.in_reply_to.is_some();
+    let out = match uc.run(&request).await {
+        Ok(out) => out,
+        Err(e) => {
+            let level = match e {
+                SendError::Invalid(_) | SendError::NotFound(_) => crate::obs::Level::Warn,
+                _ => crate::obs::Level::Error,
+            };
+            // Sem endereços no log (docs seção 9 do log de decisões).
+            crate::obs::event(
+                env,
+                level,
+                "send",
+                json!({ "outcome": "failed", "reply": reply, "error": e.to_string() }),
+            );
+            return Err(e.into());
+        }
+    };
+    let (level, stored, detail) = match &out.stored {
+        Stored::Indexed => (crate::obs::Level::Info, "indexed", None),
+        Stored::Pending(why) => (crate::obs::Level::Warn, "pending", Some(why.as_str())),
+        Stored::Lost(why) => (crate::obs::Level::Error, "lost", Some(why.as_str())),
+    };
+    crate::obs::event(
+        env,
+        level,
+        "send",
+        json!({
+            "outcome": "sent", "reply": reply, "id": out.id.to_string(),
+            "provider_id": out.provider_id, "stored": stored, "error": detail,
+            "recipients": request.to.len() + request.cc.len(),
+        }),
+    );
+    Ok(json_ok(&json!({
+        "id": out.id.to_string(),
+        "thread_id": out.thread_id.map(|t| t.to_string()),
+        "stored": stored,
+    }))?
+    .with_status(201))
 }

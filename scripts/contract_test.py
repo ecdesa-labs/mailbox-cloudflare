@@ -307,6 +307,7 @@ def main() -> int:
         verify_auth(api, access)
         verify(api, raws)
         verify_writes(api)
+        verify_send(api, state / "dev.log")
         verify_retention(api, state, port)
         verify_spec(api)
         verify_logs(state / "dev.log")
@@ -524,6 +525,48 @@ def verify_writes(api: Api) -> None:
     check(api.send("PATCH", "/api/rules/01M44NRD000000000000000099", {"enabled": False})[0] == 404, "regra inexistente -> 404")
 
 
+def verify_send(api: Api, log: Path) -> None:
+    """Fase 8. Local, o binding send_email do wrangler não entrega: só
+    registra a mensagem no log."""
+    print("POST /api/messages (envio)")
+    ident = next(i for d in api.json("/api/domains")[1]["items"] for i in d["identities"] if i["address"] == f"contato@{DOMAIN}")
+    inbox = api.json("/api/messages?limit=100")[1]["items"]
+    orig = next(i for i in inbox if i["subject"] == "Orçamento de outubro")
+    body = {
+        "in_reply_to": orig["id"], "from_identity_id": ident["id"],
+        "to": [{"name": "João da Silva", "addr": "joao@cliente.com.br"}], "cc": ["maria@cliente.com.br"],
+        "subject": "Re: Orçamento de outubro", "text": "Obrigado, João.\n\nRecebido.",
+    }
+    s, r = api.send("POST", "/api/messages", body)
+    check(s == 201 and r.get("stored") == "indexed", f"resposta enviada e indexada na hora ({s} {r})")
+    if s != 201:
+        return
+    check(r["thread_id"] == orig["thread_id"], "resposta na thread da original")
+    t = api.json(f"/api/threads/{orig['thread_id']}")[1]["messages"]
+    mine = next((m for m in t if m["id"] == r["id"]), None)
+    check(mine is not None and mine["folder"] == "sent" and mine["is_read"] is True, "na thread, em enviados e lida")
+    d = api.json(f"/api/messages/{r['id']}")[1]
+    check(d["from"]["addr"] == f"contato@{DOMAIN}" and d["identity"] == f"contato@{DOMAIN}", "From = identidade escolhida")
+    check([p["addr"] for p in d["to"]] == ["joao@cliente.com.br"] and [p["addr"] for p in d["cc"]] == ["maria@cliente.com.br"], "To e Cc gravados")
+    eml = api.request(d["raw_url"])[2]
+    check(b"In-Reply-To: <CAF+texto.001@cliente.com.br>" in eml, ".eml da cópia com In-Reply-To da original")
+    check(any(i["id"] == r["id"] for i in api.json("/api/messages?folder=sent")[1]["items"]), "lista de enviados")
+    check(all(i["id"] != r["id"] for i in api.json("/api/messages?limit=100")[1]["items"]), "fora da caixa de entrada")
+    check("Obrigado" in (api.json("/api/messages?q=obrigado")[1]["items"] or [{}])[0].get("snippet", ""), "busca acha o enviado")
+
+    s, novo = api.send("POST", "/api/messages", {"from_identity_id": ident["id"], "to": ["alguem@exemplo.com"], "subject": "Assunto novo", "text": "Oi"})
+    check(s == 201 and novo["thread_id"] not in (None, orig["thread_id"]), "mensagem nova abre thread própria")
+
+    base = {"from_identity_id": ident["id"], "to": ["a@b.com"], "subject": "x", "text": "x"}
+    check(api.send("POST", "/api/messages", base | {"to": []})[0] == 400, "sem destinatário -> 400")
+    check(api.send("POST", "/api/messages", base | {"bcc": ["c@d.com"]})[0] == 400, "campo desconhecido -> 400")
+    check(api.send("POST", "/api/messages", base | {"to": [f"a{i}@b.com" for i in range(51)]})[0] == 400, "mais de 50 destinatários -> 400")
+    check(api.send("POST", "/api/messages", base | {"from_identity_id": "01M44NRD000000000000000099"})[0] == 404, "identidade desconhecida -> 404")
+    check(api.send("POST", "/api/messages", base | {"in_reply_to": "01M44NRD000000000000000099"})[0] == 404, "original desconhecida -> 404")
+    check(api.send("POST", "/api/messages", base, {"Content-Type": "text/plain"})[0] == 415, "sem JSON -> 415")
+    check(api.send("POST", "/api/messages", base, {"Origin": "https://evil.example"})[0] == 403, "outra origem -> 403")
+
+
 def d1_local(state: Path, sql: str) -> list[dict]:
     out = subprocess.run(
         ["npx", "wrangler", "d1", "execute", "mailbox", "--local", "--persist-to", str(state), "--json", "--command", sql],
@@ -593,7 +636,7 @@ def verify_logs(log: Path) -> None:
         except json.JSONDecodeError:
             pass
     events = {p.get("event") for p in parsed}
-    check({"ingest", "process"} <= events, f"eventos no log: {sorted(e for e in events if e)}")
+    check({"ingest", "process", "send"} <= events, f"eventos no log: {sorted(e for e in events if e)}")
     check(all(p.get("level") in ("info", "warn", "error") for p in parsed), "todo evento tem level")
 
 if __name__ == "__main__":

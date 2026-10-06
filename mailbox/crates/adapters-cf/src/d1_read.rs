@@ -123,7 +123,7 @@ fn err(ctx: &'static str) -> impl Fn(worker::Error) -> PortError {
 }
 
 impl D1Index<'_> {
-    async fn query<T: for<'de> Deserialize<'de>>(
+    pub(crate) async fn query<T: for<'de> Deserialize<'de>>(
         &self,
         ctx: &'static str,
         sql: &str,

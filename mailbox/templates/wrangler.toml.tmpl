@@ -43,6 +43,12 @@ queue = "$dlq"
 max_batch_size = 10
 max_retries = 3
 
+# Envio e resposta (docs seção 6.4): Cloudflare Email Sending, plano
+# Workers Paid. Só sai de domínio verificado no Email Sending; a API só
+# aceita como remetente uma identidade cadastrada.
+[[send_email]]
+name = "MAILER"
+
 # Reconciliação R2 x D1 e pedidos de `just reprocess`.
 [triggers]
 crons = ["*/10 * * * *"]

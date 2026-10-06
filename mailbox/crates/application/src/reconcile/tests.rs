@@ -48,6 +48,7 @@ fn job_of(k: &str) -> IngestJob {
         envelope_to: "contato@acmeco.com.br".into(),
         received_at: 0,
         size: 1,
+        sent: false,
     }
 }
 

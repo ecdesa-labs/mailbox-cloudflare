@@ -3,8 +3,8 @@
 use std::fmt;
 
 use mailbox_domain::{
-    Attachment, DomainId, DomainName, EmailAddress, IdentityId, Message, MessageId, Processing,
-    Rule, Thread, ThreadId, UnixMs,
+    Attachment, DomainId, DomainName, EmailAddress, IdentityId, Mailbox, Message, MessageId,
+    Processing, Rule, Thread, ThreadId, UnixMs,
 };
 
 /// Falha de infraestrutura, com a mensagem do adaptador para log.
@@ -48,6 +48,10 @@ pub struct IngestJob {
     pub envelope_to: String,
     pub received_at: i64,
     pub size: u64,
+    /// Enviado por nós (`POST /api/messages`), não recebido: vai para
+    /// `sent`, já lido, sem regras. Só o servidor grava essa marca (no
+    /// job e nos metadados do R2); um email recebido nunca chega com ela.
+    pub sent: bool,
 }
 
 #[allow(async_fn_in_trait)]
@@ -186,4 +190,71 @@ pub trait ReconcileIndex {
     async fn given_up(&self, limit: usize) -> Result<Vec<String>, PortError>;
     /// Apaga as falhas dessas chaves (vão ser tentadas de novo).
     async fn clear_failures(&self, raw_keys: &[String]) -> Result<(), PortError>;
+}
+
+// ---------------------------------------------------------------- envio ----
+
+/// Identidade que assina um envio (o `From`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sender {
+    pub address: EmailAddress,
+    /// Nome de exibição (o `label` da identidade).
+    pub name: Option<String>,
+    pub domain: DomainName,
+}
+
+/// O que uma resposta precisa saber da mensagem original.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyTarget {
+    pub domain: DomainName,
+    /// Sem `<>`. `None` se a original veio sem `Message-ID`.
+    pub message_id_hdr: Option<String>,
+    pub references: Vec<String>,
+    pub thread_id: Option<ThreadId>,
+}
+
+/// Consultas do envio (D1).
+#[allow(async_fn_in_trait)]
+pub trait SendIndex {
+    async fn sender(&self, id: IdentityId) -> Result<Option<Sender>, PortError>;
+    /// Mensagem visível (não oculta por regra).
+    async fn reply_target(&self, id: MessageId) -> Result<Option<ReplyTarget>, PortError>;
+}
+
+/// Mensagem pronta para sair. IDs de mensagem sem `<>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutgoingMail {
+    pub from: Mailbox,
+    pub to: Vec<Mailbox>,
+    pub cc: Vec<Mailbox>,
+    pub subject: String,
+    pub text: String,
+    pub html: Option<String>,
+    pub in_reply_to: Option<String>,
+    pub references: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MailerError {
+    /// O serviço recusou esta mensagem (remetente não verificado, cabeçalho
+    /// proibido...). Tentar de novo igual não resolve.
+    Rejected { code: String, message: String },
+    /// Cota ou limite de taxa. Tentar mais tarde.
+    RateLimited(String),
+    /// Falha sem código conhecido. Não se sabe se saiu.
+    Unavailable(String),
+}
+
+/// Cloudflare Email Sending (docs seção 6.4). Devolve o id que o serviço
+/// deu à mensagem.
+#[allow(async_fn_in_trait)]
+pub trait Mailer {
+    async fn send(&self, mail: &OutgoingMail) -> Result<String, MailerError>;
+}
+
+/// Grava em `job.raw_key` um `.eml` montado aqui (o enviado), com os mesmos
+/// metadados que o ingest grava.
+#[allow(async_fn_in_trait)]
+pub trait RawWriter {
+    async fn write(&self, job: &IngestJob, eml: &[u8]) -> Result<(), PortError>;
 }

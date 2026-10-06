@@ -67,6 +67,7 @@ where
             envelope_to: to.to_string(),
             received_at: received_at.as_i64(),
             size: envelope.size,
+            sent: false,
         };
 
         if let Err(error) = self.store.store(&job).await {
@@ -202,6 +203,7 @@ mod tests {
                 envelope_to: "contato@acmeco.com.br".into(),
                 received_at: NOW,
                 size: 4321,
+                sent: false,
             }]
         );
     }

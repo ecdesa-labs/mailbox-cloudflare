@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use mailbox_application::{
     BlobPurge, BlobStore, IngestJob, PortError, RawListing, RawMailStore, RawObject, RawPage,
+    RawWriter,
 };
 use mailbox_domain::{RawKey, UnixMs};
 use wasm_bindgen::prelude::*;
@@ -51,11 +52,36 @@ impl RawMailStore for EmailRawStore<'_> {
 /// O envelope não está no `.eml`; vai no objeto para a reconciliação
 /// (docs seção 6.6) refazer o job só a partir do R2.
 fn envelope_metadata(job: &IngestJob) -> HashMap<String, String> {
-    HashMap::from([
+    let mut meta = HashMap::from([
         ("envelope-from".into(), job.envelope_from.clone()),
         ("envelope-to".into(), job.envelope_to.clone()),
         ("received-at".into(), job.received_at.to_string()),
-    ])
+    ]);
+    if job.sent {
+        meta.insert(DIRECTION.into(), SENT.into());
+    }
+    meta
+}
+
+/// Metadado que marca um `.eml` enviado por nós (ausente = recebido).
+const DIRECTION: &str = "direction";
+const SENT: &str = "sent";
+
+/// `.eml` montado no envio: os bytes já estão no wasm (são pequenos).
+impl RawWriter for R2Blobs<'_> {
+    async fn write(&self, job: &IngestJob, eml: &[u8]) -> Result<(), PortError> {
+        self.bucket
+            .put(&job.raw_key, eml.to_vec())
+            .http_metadata(HttpMetadata {
+                content_type: Some("message/rfc822".into()),
+                ..Default::default()
+            })
+            .custom_metadata(envelope_metadata(job))
+            .execute()
+            .await
+            .map(|_| ())
+            .map_err(|e| PortError(format!("r2 put {}: {e}", job.raw_key)))
+    }
 }
 
 /// Objetos do R2 por chave (raw, anexos, HTML).
@@ -169,6 +195,7 @@ fn job_from_metadata(key: &str, size: u64, meta: &HashMap<String, String>) -> Op
         envelope_to,
         received_at,
         size,
+        sent: meta.get(DIRECTION).is_some_and(|d| d == SENT),
     })
 }
 
