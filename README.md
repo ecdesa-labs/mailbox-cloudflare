@@ -278,14 +278,10 @@ O front (Next.js estático) é desenvolvido em paralelo.
 
 ### Melhorias futuras
 
-- [ ] **Ligar as métricas no Analytics Engine** (como definido na Fase 9).
-  Hoje estão desligadas nesta instância: o deploy falhava com o código 10089
-  ("You need to enable Analytics Engine") e a página do painel só mostrava o
-  título "Setup Analytics Engine", sem botão de ativar. A fazer: descobrir como
-  ativar o produto na conta (outra tela, suporte ou API), rodar
-  `just configure --metrics on` e `just deploy`, e conferir que os pontos chegam
-  com uma consulta à SQL API. O código já escreve as métricas quando o binding
-  existe.
+- [x] **Ligar as métricas no Analytics Engine** (como definido na Fase 9).
+  O produto precisa ser ativado na conta antes do primeiro deploy com o
+  binding (senão: código 10089). A ativação pode levar alguns minutos para
+  valer; depois, `just configure --metrics on` e `just deploy`.
 
 - [ ] **Charsets asiáticos multibyte** (Shift_JIS, ISO-2022-JP, GB2312, GBK,
   Big5, EUC-KR). Hoje viram texto com caracteres de substituição e a mensagem
