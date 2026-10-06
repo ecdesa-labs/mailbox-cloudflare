@@ -163,6 +163,8 @@ Todas as opções: `just configure --help`.
 | `just deploy` | CI + migração remota + publicação + teste de fumaça |
 | `just dev` | Sobe local com `wrangler dev` (D1, R2 e filas simulados) |
 | `just contract` | Testes de contrato da API com Worker, D1, R2 e filas locais |
+| `just front-dev` | Front local com fixtures (sem API), em `localhost:3000` |
+| `just front-build` | Gera o front estático em `mailbox/web/out` (o `deploy` já faz) |
 | `just email-enable` | Liga o Email Routing nos domínios da instância (substitui os MX) |
 | `just email-route <endereço>` | Manda um endereço específico para o Worker |
 | `just email-catchall` | Manda todos os endereços dos domínios para o Worker |
@@ -249,7 +251,7 @@ mailbox-cloudflare/
     worker/             os três handlers e a montagem dos adaptadores
     migrations/         SQL do D1
     templates/          base dos arquivos gerados pela instância
-    web/                front estático
+    web/                front (Next.js estático; prompts do v0 em web/prompts/)
     instance.example.json  modelo da instância (o seu instance.json fica fora do git)
     docs/               notas locais (fora do git)
   mailbox-spike/        prova de conceito que validou a plataforma

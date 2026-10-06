@@ -13,3 +13,6 @@ mailbox/migrations/0002_seed_domains.sql
 mailbox/.dev.vars
 # Notas pessoais de contexto e log de decisões.
 mailbox/docs/
+
+# Configuração local de ferramentas (preview do editor)
+.claude/

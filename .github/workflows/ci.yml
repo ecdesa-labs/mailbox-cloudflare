@@ -20,7 +20,12 @@ jobs:
         with:
           workspaces: mailbox
       - uses: taiki-e/install-action@just
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - run: cargo install worker-build --locked
       # instance.json e os arquivos gerados ficam fora do git (dados da conta).
       - run: cp instance.example.json instance.json && python3 ../scripts/setup_instance.py
       - run: just ci
+      - run: just front-build
+        working-directory: .

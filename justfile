@@ -12,6 +12,9 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 set positional-arguments
 
 mailbox := justfile_directory() / "mailbox"
+web := mailbox / "web"
+# pnpm na versão fixada no package.json do front (sem instalar global).
+pnpm := "npx --yes pnpm@12.3.4"
 # Nomes lidos a cada chamada, porque `configure` pode ter acabado de mudá-los.
 env := "set -a; source '" + mailbox / "instance.env" + "'; set +a"
 
@@ -103,8 +106,8 @@ _require-db-id:
     {{ env }} && [ "$MAILBOX_DATABASE_ID" != "00000000-0000-0000-0000-000000000000" ] \
         || { echo "D1 ainda com id placeholder: rode \`just bootstrap\` antes." >&2; exit 1; }
 
-# CI + migração remota + publicação + teste de fumaça em /api/ping
-deploy: _require-db-id ci migrate-remote
+# CI + front + migração remota + publicação + teste de fumaça em /api/ping
+deploy: _require-db-id ci front-build migrate-remote
     #!/usr/bin/env bash
     set -euo pipefail
     {{ env }}
@@ -200,9 +203,21 @@ failures:
     | python3 -c 'import json,sys; [print(t, *r["results"] or ["(nada)"], sep="\n  ") for t, r in zip(["Falhas:", "Pedidos pendentes:"], json.load(sys.stdin))]' 
 
 # Testes de contrato da API com Worker, D1, R2 e filas locais (estado isolado)
-contract: (ci)
+contract: ci front-build
     python3 scripts/contract_test.py
 
-# Sobe local com wrangler dev
-dev:
+# Dependências do front, exatamente as do lockfile
+front-install:
+    cd "{{ web }}" && {{ pnpm }} install --frozen-lockfile
+
+# Gera o front estático em mailbox/web/out (o Worker serve daqui)
+front-build: front-install
+    cd "{{ web }}" && NEXT_TELEMETRY_DISABLED=1 {{ pnpm }} build
+
+# Front local com as fixtures (sem API nem Worker), em http://localhost:3000
+front-dev: front-install
+    cd "{{ web }}" && NEXT_PUBLIC_MOCK=1 NEXT_TELEMETRY_DISABLED=1 {{ pnpm }} dev
+
+# Sobe local com wrangler dev (Worker + front gerado + D1/R2/filas locais)
+dev: front-build
     cd "{{ mailbox }}" && just dev
