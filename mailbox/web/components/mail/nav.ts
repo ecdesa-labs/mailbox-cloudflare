@@ -8,10 +8,14 @@ export const FOLDERS: Folder[] = ['inbox', 'archive', 'trash', 'spam', 'sent']
 
 export interface NavState {
   folder: Folder
+  /** A pasta veio da URL (numa busca, sem pasta explícita = todas as pastas). */
+  folderExplicit: boolean
   /** '' = caixa unificada */
   domain: string
   /** '' = nenhuma mensagem aberta */
   id: string
+  /** '' = sem busca */
+  q: string
 }
 
 function isFolder(v: string | null): v is Folder {
@@ -31,8 +35,10 @@ export function useNav() {
   const state = useMemo<NavState>(
     () => ({
       folder: isFolder(params.get('folder')) ? (params.get('folder') as Folder) : 'inbox',
+      folderExplicit: isFolder(params.get('folder')),
       domain: params.get('domain') ?? '',
       id: params.get('id') ?? '',
+      q: params.get('q') ?? '',
     }),
     [params],
   )
@@ -41,9 +47,12 @@ export function useNav() {
   const navigate = useCallback(
     (next: Partial<NavState>, opts: { replace?: boolean } = {}) => {
       const merged = { ...state, ...next }
+      // Escolher pasta torna a pasta explícita (inclusive a entrada).
+      const explicit = next.folder !== undefined ? true : merged.folderExplicit
       const q = new URLSearchParams()
-      if (merged.folder !== 'inbox') q.set('folder', merged.folder)
+      if (explicit && (merged.folder !== 'inbox' || merged.q)) q.set('folder', merged.folder)
       if (merged.domain) q.set('domain', merged.domain)
+      if (merged.q) q.set('q', merged.q)
       if (merged.id) q.set('id', merged.id)
       const url = q.size ? `${pathname}?${q}` : pathname
       if (opts.replace) router.replace(url, { scroll: false })

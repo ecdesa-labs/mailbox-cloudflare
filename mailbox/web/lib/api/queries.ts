@@ -24,7 +24,6 @@ export function useMe() {
   return useQuery({
     queryKey: queryKeys.me(),
     queryFn: () => apiClient.getMe(),
-    retry: 1,
   });
 }
 
@@ -33,7 +32,6 @@ export function useDomains() {
   return useQuery({
     queryKey: queryKeys.domains(),
     queryFn: () => apiClient.getDomains(),
-    retry: 1,
   });
 }
 
@@ -45,7 +43,6 @@ export function useMessages(folder?: string, domain?: string, q?: string) {
       apiClient.getMessages(folder, domain, q, pageParam, 20),
     getNextPageParam: (lastPage: Page) => lastPage.next_cursor,
     initialPageParam: undefined,
-    retry: 1,
   });
 }
 
@@ -55,7 +52,6 @@ export function useMessage(id: string | null, enabled: boolean = true) {
     queryKey: queryKeys.message(id || ''),
     queryFn: () => (id ? apiClient.getMessage(id) : Promise.reject()),
     enabled: !!id && enabled,
-    retry: 1,
   });
 }
 
@@ -65,7 +61,6 @@ export function useThread(id: string | null, enabled: boolean = true) {
     queryKey: queryKeys.thread(id || ''),
     queryFn: () => (id ? apiClient.getThread(id) : Promise.reject()),
     enabled: !!id && enabled,
-    retry: 1,
   });
 }
 
@@ -74,7 +69,6 @@ export function useRules() {
   return useQuery({
     queryKey: queryKeys.rules(),
     queryFn: () => apiClient.getRules(),
-    retry: 1,
   });
 }
 
@@ -94,6 +88,8 @@ export function usePatchMessage() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.messages(),
       });
+      // Contadores de não lidos
+      queryClient.invalidateQueries({ queryKey: queryKeys.domains() });
     },
   });
 }
@@ -109,6 +105,7 @@ export function useBulkPatchMessages() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.messages(),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.domains() });
     },
   });
 }
