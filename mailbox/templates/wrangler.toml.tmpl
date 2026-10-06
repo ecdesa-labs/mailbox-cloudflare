@@ -66,10 +66,5 @@ MAILBOX_ACCESS_TEAM = "$access_team"
 MAILBOX_ACCESS_AUD = "$access_aud"
 MAILBOX_ALLOWED_EMAILS = "$allowed_emails"
 
-# Métricas (Fase 9). Free: 100 mil pontos por dia.
-[[analytics_engine_datasets]]
-binding = "METRICS"
-dataset = "${worker}_events"
-
-[observability]
+$metrics_block[observability]
 enabled = true

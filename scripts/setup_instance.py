@@ -56,6 +56,9 @@ DEFAULTS = {
     "access_team": "",
     "access_aud": "",
     "allowed_emails": [],
+    # Analytics Engine (Fase 9). Desligado por padrão: a conta precisa ativar
+    # o produto no painel antes, senão o deploy falha (código 10089).
+    "metrics": False,
 }
 RESOURCE_KEYS = ("worker", "bucket", "database", "queue", "dlq")
 
@@ -103,6 +106,8 @@ def validate(cfg: dict) -> None:
         raise ConfigError(f"access_team inválido: {cfg['access_team']!r} (ex.: acmeco.cloudflareaccess.com)")
     if cfg["access_aud"] and not ACCESS_AUD_RE.match(cfg["access_aud"]):
         raise ConfigError(f"access_aud inválido: {cfg['access_aud']!r} (Application Audience Tag, hexadecimal)")
+    if not isinstance(cfg["metrics"], bool):
+        raise ConfigError("metrics precisa ser true ou false")
     if bool(cfg["access_team"]) != bool(cfg["access_aud"]):
         raise ConfigError("access_team e access_aud andam juntos")
     for e in cfg["allowed_emails"]:
@@ -164,6 +169,8 @@ def apply_args(cfg: dict, args: argparse.Namespace) -> dict:
         cfg["access_team"] = args.access_team.strip().lower().removeprefix("https://").rstrip("/")
     if args.access_aud is not None:
         cfg["access_aud"] = args.access_aud.strip().lower()
+    if args.metrics is not None:
+        cfg["metrics"] = args.metrics == "on"
     if args.allowed_email:
         cfg["allowed_emails"] = [e.strip().lower() for e in args.allowed_email if e.strip()]
 
@@ -202,6 +209,15 @@ def render(root: Path, cfg: dict) -> dict[Path, str]:
         {k: cfg[k] for k in (*RESOURCE_KEYS, "database_id", "access_team", "access_aud")},
         domains=",".join(d["name"] for d in cfg["domains"]),
         allowed_emails=",".join(cfg["allowed_emails"]),
+        metrics_block=(
+            "# Métricas (Fase 9). Free: 100 mil pontos por dia.\n"
+            "[[analytics_engine_datasets]]\n"
+            'binding = "METRICS"\n'
+            f'dataset = "{cfg["worker"]}_events"\n\n'
+            if cfg["metrics"]
+            else "# Métricas desligadas (`just configure --metrics on` depois de ativar o\n"
+            "# Analytics Engine no painel). Os logs estruturados funcionam sem elas.\n\n"
+        ),
     )
 
     rows = ",\n".join(
@@ -224,7 +240,7 @@ def render(root: Path, cfg: dict) -> dict[Path, str]:
 
 def dump(cfg: dict) -> str:
     ordered = {k: cfg[k] for k in (*RESOURCE_KEYS[:3], "database_id", *RESOURCE_KEYS[3:])}
-    ordered |= {k: cfg[k] for k in ("access_team", "access_aud", "allowed_emails")}
+    ordered |= {k: cfg[k] for k in ("access_team", "access_aud", "allowed_emails", "metrics")}
     ordered["domains"] = cfg["domains"]
     return json.dumps(ordered, indent=2, ensure_ascii=False) + "\n"
 
@@ -255,6 +271,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     a.add_argument("--access-team", help="team domain, ex.: acmeco.cloudflareaccess.com")
     a.add_argument("--access-aud", help="Application Audience (AUD) Tag")
     a.add_argument("--allowed-email", action="append", default=[], help="email permitido (repetível; vazio = quem a política do Access deixar)")
+
+    p.add_argument("--metrics", choices=["on", "off"], help="métricas no Analytics Engine (ative o produto no painel antes)")
 
     p.add_argument("--check", action="store_true", help="não escreve; falha se os gerados estão desatualizados")
     p.add_argument("--root", type=Path, default=ROOT, help=argparse.SUPPRESS)

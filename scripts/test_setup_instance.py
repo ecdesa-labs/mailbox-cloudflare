@@ -96,6 +96,15 @@ class InstanciaNova(unittest.TestCase):
             with self.subTest(argv=argv):
                 self.assertEqual(run(self.root, *argv)[0], 2)
 
+    def test_metricas(self):
+        run(self.root, "--domain", "a.com", "--label", "A", "--color", "#111")
+        w = (self.root / "wrangler.toml").read_text()
+        self.assertNotIn("analytics_engine_datasets", w, "desligado por padrão")
+        self.assertEqual(run(self.root, "--metrics", "on")[0], 0)
+        w = (self.root / "wrangler.toml").read_text()
+        self.assertIn('dataset = "mailbox_events"', w)
+        self.assertIs(self.cfg()["metrics"], True)
+
     def test_escapa_aspas_no_sql(self):
         run(self.root, "--domain", "a.com", "--label", "D'Ávila", "--color", "#111")
         seed = (self.root / "migrations/0002_seed_domains.sql").read_text()

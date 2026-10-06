@@ -8,6 +8,7 @@
   "access_team": "",
   "access_aud": "",
   "allowed_emails": [],
+  "metrics": false,
   "domains": [
     {
       "id": "01M44NRD000000000000000001",

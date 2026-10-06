@@ -217,7 +217,10 @@ wrangler, fora do projeto), mas identificam a sua conta.
 - **Logs:** todo evento sai em JSON com `level` e `event` (`ingest`, `process`,
   `dlq`, `reconcile`, `retention`, `auth`, `api_error`). Veja em **Workers &
   Pages → mailbox → Logs** ou com `npx wrangler tail`.
-- **Métricas:** Analytics Engine, dataset `<worker>_events`. Cada ponto tem
+- **Métricas (opcional):** Analytics Engine, dataset `<worker>_events`. Vêm
+  desligadas: a conta precisa ativar o Analytics Engine no painel antes (senão o
+  deploy falha com o código 10089). Depois, `just configure --metrics on` e
+  `just deploy`. Cada ponto tem
   `index1` = evento, `blob1..3` = evento, resultado e domínio, `double1` =
   tamanho em bytes e `double2` = contagem. Exemplo (SQL API do Analytics Engine):
 
