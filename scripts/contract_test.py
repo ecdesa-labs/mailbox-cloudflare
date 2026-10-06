@@ -11,6 +11,7 @@ espera a fila processar e confere cada endpoint.
 from __future__ import annotations
 
 import base64
+import re
 import http.server
 import json
 import shutil
@@ -139,14 +140,115 @@ class Api:
 
     def json(self, path: str) -> tuple[int, dict]:
         status, _, body = self.request(path)
-        return status, json.loads(body)
+        data = json.loads(body)
+        SPEC.validate("get", path, status, data)
+        return status, data
 
     def send(self, method: str, path: str, body=None, headers: dict | None = None) -> tuple[int, dict]:
         """Mutação com JSON (como o front faz). `headers` sobrescreve."""
         h = {"Content-Type": "application/json"} | (headers or {})
         data = None if body is None else (body if isinstance(body, bytes) else json.dumps(body).encode())
         status, _, raw = self.request(path, data, method, h)
-        return status, (json.loads(raw) if raw else {})
+        out = json.loads(raw) if raw else {}
+        if raw:
+            SPEC.validate(method.lower(), path, status, out)
+        return status, out
+
+
+class Spec:
+    """Validador mínimo de JSON Schema (o subconjunto que o openapi.json
+    usa): toda resposta JSON do teste é conferida contra a especificação."""
+
+    def __init__(self, doc: dict) -> None:
+        self.doc = doc
+        self.checked = 0
+        self.violations: list[str] = []
+
+    def resolve(self, schema: dict) -> dict:
+        while "$ref" in schema:
+            node = self.doc
+            for part in schema["$ref"].lstrip("#/").split("/"):
+                node = node[part]
+            schema = node
+        return schema
+
+    def errors(self, schema: dict, v, at: str = "$") -> list[str]:
+        schema = self.resolve(schema)
+        if "allOf" in schema:
+            # allOf de objetos: une campos (additionalProperties vale para a união).
+            merged: dict = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+            for part in schema["allOf"]:
+                part = self.resolve(part)
+                merged["properties"] |= part.get("properties", {})
+                merged["required"] += part.get("required", [])
+            return self.errors(merged, v, at)
+        if "oneOf" in schema:
+            ok = [s for s in schema["oneOf"] if not self.errors(s, v, at)]
+            return [] if len(ok) == 1 else [f"{at}: {len(ok)} opções de oneOf servem"]
+        out = []
+        types = schema.get("type")
+        if types:
+            types = [types] if isinstance(types, str) else types
+            pytype = {dict: "object", list: "array", str: "string", bool: "boolean", type(None): "null"}.get(type(v))
+            if isinstance(v, int) and not isinstance(v, bool):
+                pytype = "integer"
+            elif isinstance(v, float):
+                pytype = "integer" if v.is_integer() else "number"
+            if pytype not in types and not (pytype == "integer" and "number" in types):
+                return [f"{at}: tipo {pytype}, esperado {types}"]
+        if "enum" in schema and v not in schema["enum"]:
+            out.append(f"{at}: {v!r} fora de {schema['enum']}")
+        if "const" in schema and v != schema["const"]:
+            out.append(f"{at}: {v!r} != {schema['const']!r}")
+        if isinstance(v, str) and "pattern" in schema and not re.match(schema["pattern"], v):
+            out.append(f"{at}: {v!r} não casa {schema['pattern']}")
+        if isinstance(v, dict):
+            props = schema.get("properties", {})
+            for k in schema.get("required", []):
+                if k not in v:
+                    out.append(f"{at}: falta {k}")
+            for k, val in v.items():
+                if k in props:
+                    out += self.errors(props[k], val, f"{at}.{k}")
+                elif schema.get("additionalProperties") is False:
+                    out.append(f"{at}: campo fora da especificação: {k}")
+        if isinstance(v, list) and "items" in schema:
+            for i, item in enumerate(v):
+                out += self.errors(schema["items"], item, f"{at}[{i}]")
+        return out
+
+    def template(self, path: str) -> str | None:
+        segs = urllib.parse.urlsplit(path).path.split("/")
+        for tpl in self.doc["paths"]:
+            t = tpl.split("/")
+            if len(t) == len(segs) and all(a == b or a.startswith("{") for a, b in zip(t, segs)):
+                # Prefere rota estática (ex.: /bulk) à com parâmetro.
+                if "{" not in tpl or not any(
+                    o.split("/") == segs for o in self.doc["paths"] if "{" not in o
+                ):
+                    return tpl
+        return None
+
+    def validate(self, method: str, path: str, status: int, data) -> None:
+        if not urllib.parse.urlsplit(path).path.startswith("/api/"):
+            return
+        tpl = self.template(path)
+        if tpl is None and status == 404:
+            return  # rota inexistente de propósito (teste do 404 genérico)
+        op = self.doc["paths"].get(tpl, {}).get(method) if tpl else None
+        resp = (op or {}).get("responses", {}).get(str(status))
+        if resp is None:
+            self.violations.append(f"{method.upper()} {path} -> {status}: resposta não documentada")
+            return
+        schema = self.resolve(resp).get("content", {}).get("application/json", {}).get("schema")
+        if schema is None:
+            return
+        self.checked += 1
+        for e in self.errors(schema, data):
+            self.violations.append(f"{method.upper()} {path} -> {status}: {e}")
+
+
+SPEC = Spec(json.loads((MAILBOX / "worker/openapi.json").read_text()))
 
 
 def free_port() -> int:
@@ -205,6 +307,9 @@ def main() -> int:
         verify_auth(api, access)
         verify(api, raws)
         verify_writes(api)
+        verify_retention(api, state, port)
+        verify_spec(api)
+        verify_logs(state / "dev.log")
     finally:
         if server:
             server.terminate()
@@ -417,6 +522,79 @@ def verify_writes(api: Api) -> None:
     check(api.send("DELETE", f"/api/rules/{rule['id']}", None)[0] == 204, "apagar regra -> 204")
     check(api.send("DELETE", f"/api/rules/{rule['id']}", None)[0] == 404, "apagar de novo -> 404")
     check(api.send("PATCH", "/api/rules/01M44NRD000000000000000099", {"enabled": False})[0] == 404, "regra inexistente -> 404")
+
+
+def d1_local(state: Path, sql: str) -> list[dict]:
+    out = subprocess.run(
+        ["npx", "wrangler", "d1", "execute", "mailbox", "--local", "--persist-to", str(state), "--json", "--command", sql],
+        cwd=MAILBOX, check=True, capture_output=True, text=True,
+    ).stdout  # fmt: skip
+    return json.loads(out)[0]["results"]
+
+
+def run_cron(api: Api, log: Path) -> None:
+    before = log.read_text(errors="replace").count('"event":"reconcile"')
+    status, _, body = api.request("/cdn-cgi/local/scheduled?cron=" + urllib.parse.quote("*/10 * * * *"))
+    if status != 200:
+        raise SystemExit(f"não consegui disparar o cron ({status}): {body[:200]!r}")
+    for _ in range(30):
+        if log.read_text(errors="replace").count('"event":"reconcile"') > before:
+            time.sleep(1)  # a retenção roda logo depois da reconciliação
+            return
+        time.sleep(0.5)
+    raise SystemExit("o cron não registrou a reconciliação no log")
+
+
+def verify_retention(api: Api, state: Path, port: int) -> None:
+    print("retenção (lixeira 30 dias)")
+    items = api.json("/api/messages?limit=100")[1]["items"]
+    by = {i["subject"]: i for i in items}
+    velho, novo = by["Orçamento de outubro"], by["Re: [acmeco/mailbox] CI passou"]
+    for m in (velho, novo):
+        api.send("PATCH", f"/api/messages/{m['id']}", {"folder": "trash"})
+    row = d1_local(state, f"SELECT folder_changed_at FROM messages WHERE id = '{velho['id']}'")[0]
+    check(row["folder_changed_at"] and abs(row["folder_changed_at"] / 1000 - time.time()) < 120, "mover para a lixeira grava quando")
+    raw_url = api.json(f"/api/messages/{velho['id']}")[1]["raw_url"]
+    thread_before = api.json(f"/api/threads/{velho['thread_id']}")[1]["messages"]
+    # Simula 31 dias na lixeira só para a primeira.
+    d1_local(state, f"UPDATE messages SET folder_changed_at = folder_changed_at - 31 * 86400000 WHERE id = '{velho['id']}'")
+    run_cron(api, state / "dev.log")
+    check(api.json(f"/api/messages/{velho['id']}")[0] == 404, "vencida foi apagada")
+    check(api.request(raw_url)[0] == 404, "o .eml dela também (não volta pela reconciliação)")
+    check(api.json(f"/api/messages/{novo['id']}")[0] == 200, "recém-movida para a lixeira fica")
+    t = api.json(f"/api/threads/{velho['thread_id']}")[1]
+    check([m["id"] for m in t["messages"]] == [m["id"] for m in thread_before if m["id"] != velho["id"]], "thread perdeu só a mensagem apagada")
+    check(api.json("/api/messages?q=s%C3%ADmbolos")[1]["items"] == [], "some da busca (FTS)")
+
+
+def verify_spec(api: Api) -> None:
+    print("OpenAPI")
+    s, doc = api.json("/api/openapi.json")
+    check(s == 200 and doc.get("openapi", "").startswith("3.1"), "/api/openapi.json publicado (3.1)")
+    src = (MAILBOX / "worker/src/api.rs").read_text()
+    routes = {(m, re.sub(r":(\w+)", r"{\1}", p)) for m, p in re.findall(r'\.(get|post|patch|delete)(?:_async)?\(\s*"(/api/[^"*]+)"', src)}
+    documented = {(m, p) for p, ops in doc["paths"].items() for m in ops if m in ("get", "post", "patch", "delete")}
+    check(routes == documented, f"rotas do código = rotas documentadas ({len(routes)})"
+          + ("" if routes == documented else f" | só no código: {routes - documented} | só na spec: {documented - routes}"))
+    check(SPEC.checked > 50, f"{SPEC.checked} respostas JSON validadas contra o schema")
+    for v in SPEC.violations[:10]:
+        print("        " + v)
+    check(not SPEC.violations, f"nenhuma resposta fora da especificação ({len(SPEC.violations)} violações)")
+
+
+def verify_logs(log: Path) -> None:
+    print("logs estruturados")
+    lines = [l for l in log.read_text(errors="replace").splitlines() if '"event"' in l]
+    parsed = []
+    for l in lines:
+        i = l.find("{")
+        try:
+            parsed.append(json.loads(re.sub(r"\x1b\[[0-9;]*m", "", l[i:])))
+        except json.JSONDecodeError:
+            pass
+    events = {p.get("event") for p in parsed}
+    check({"ingest", "process"} <= events, f"eventos no log: {sorted(e for e in events if e)}")
+    check(all(p.get("level") in ("info", "warn", "error") for p in parsed), "todo evento tem level")
 
 if __name__ == "__main__":
     sys.exit(main())

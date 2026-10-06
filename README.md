@@ -208,6 +208,29 @@ divergirem do `instance.json`. Para mudar algo no `wrangler.toml`, edite o
 template. Nenhum deles guarda segredo (token de API fica no login do
 wrangler, fora do projeto), mas identificam a sua conta.
 
+## Operação
+
+- **Retenção:** lixeira e spam são apagados de vez (com o `.eml`) 30 dias depois
+  de irem para lá; mensagens ocultas por regra `reject`, 30 dias depois de
+  ocultadas. Ajuste em `[vars]` do template (`MAILBOX_RETENTION_*_DAYS`; `0` =
+  nunca). Roda no mesmo cron da reconciliação.
+- **Logs:** todo evento sai em JSON com `level` e `event` (`ingest`, `process`,
+  `dlq`, `reconcile`, `retention`, `auth`, `api_error`). Veja em **Workers &
+  Pages → mailbox → Logs** ou com `npx wrangler tail`.
+- **Métricas:** Analytics Engine, dataset `<worker>_events`. Cada ponto tem
+  `index1` = evento, `blob1..3` = evento, resultado e domínio, `double1` =
+  tamanho em bytes e `double2` = contagem. Exemplo (SQL API do Analytics Engine):
+
+  ```sql
+  SELECT blob1 AS evento, blob2 AS resultado, SUM(_sample_interval * double2) AS total
+  FROM mailbox_events WHERE timestamp > NOW() - INTERVAL '1' DAY
+  GROUP BY evento, resultado ORDER BY total DESC
+  ```
+
+- **API:** a especificação OpenAPI 3.1 fica em `/api/openapi.json` (fonte:
+  [`mailbox/worker/openapi.json`](mailbox/worker/openapi.json)). O `just contract`
+  confere que ela cobre todas as rotas e que toda resposta bate com o schema.
+
 ## Estrutura do repositório
 
 ```
@@ -246,7 +269,7 @@ e por isso são testados nativamente, sem Cloudflare.
 | 6 | Autenticação com Cloudflare Access | ✅ |
 | 7 | Busca, flags, pastas, ações em lote, regras de roteamento | ✅ |
 | 8 | Responder e enviar (Email Sending) | |
-| 9 | Retenção, métricas, logs estruturados, OpenAPI | |
+| 9 | Retenção, métricas, logs estruturados, OpenAPI | ✅ |
 
 O front (Next.js estático) é desenvolvido em paralelo.
 

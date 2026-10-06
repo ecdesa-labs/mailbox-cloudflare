@@ -6,6 +6,7 @@ pub mod ports;
 pub mod process;
 pub mod read;
 pub mod reconcile;
+pub mod retention;
 pub mod write;
 
 pub use auth::{
@@ -27,6 +28,7 @@ pub use read::{
     ReadModel, ThreadView,
 };
 pub use reconcile::{Reconcile, ReconcileReport};
+pub use retention::{BlobPurge, Cutoffs, Expired, Retention, RetentionPolicy, RetentionStore};
 pub use write::{
     apply_rule_patch, rule_from_json, rule_json, BulkPatch, MailWriter, MessagePatch, RuleStore,
     MAX_BULK,

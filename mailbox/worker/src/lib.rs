@@ -4,13 +4,15 @@ use mailbox_adapters_cf::{
 };
 use mailbox_application::{
     handle_job, Clock, Delivery, Envelope, FailureLog, IngestEmail, IngestJob, IngestOutcome,
-    ProcessMessage, Reconcile,
+    ProcessMessage, Reconcile, Retention, RetentionPolicy,
 };
 use mailbox_domain::DomainName;
+use obs::Level;
 use serde_json::json;
 use worker::*;
 
 mod api;
+mod obs;
 
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
@@ -28,7 +30,34 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             Err(resp) => return Ok(resp),
         }
     };
-    api::router(identity).run(req, env).await
+    let method = req.method().to_string();
+    let route = route_label(&path);
+    let started = Date::now().as_millis();
+    let resp = api::router(identity).run(req, env.clone()).await?;
+    let status = resp.status_code();
+    let fields = json!({ "method": method, "route": route, "status": status, "outcome": status.to_string(),
+                         "ms": Date::now().as_millis().saturating_sub(started) });
+    // Métrica de toda requisição; log só de erro do servidor.
+    obs::metric(&env, "api", Level::Info, &fields);
+    if status >= 500 {
+        obs::log(Level::Error, "api", &fields);
+    }
+    Ok(resp)
+}
+
+/// Rota sem IDs (`/api/messages/01J.../raw` → `/api/messages/:id/raw`), para
+/// agrupar métricas.
+fn route_label(path: &str) -> String {
+    path.split('/')
+        .map(|seg| {
+            if seg.len() == 26 && seg.chars().all(|c| c.is_ascii_alphanumeric()) {
+                ":id"
+            } else {
+                seg
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// Exportação `email` escrita à mão, sem `#[event(email)]`: no workers-rs
@@ -73,9 +102,11 @@ async fn handle_email(message: ForwardableEmailMessage, env: Env) -> Result<()> 
     // Só existe com `wrangler deploy --var MAILBOX_TEST_TEMPFAIL:<endereço>`.
     if let Ok(addr) = env.var("MAILBOX_TEST_TEMPFAIL") {
         if addr.to_string().eq_ignore_ascii_case(&envelope.to) {
-            console_error!(
-                r#"{{"event":"ingest","outcome":"test_tempfail","to":"{}"}}"#,
-                envelope.to
+            obs::event(
+                &env,
+                Level::Error,
+                "ingest",
+                json!({ "outcome": "test_tempfail", "to": envelope.to }),
             );
             return Err(Error::RustError("falha temporária de teste".into()));
         }
@@ -94,39 +125,47 @@ async fn handle_email(message: ForwardableEmailMessage, env: Env) -> Result<()> 
     .run(&envelope)
     .await;
 
-    let log = |outcome: &str, extra: serde_json::Value| {
-        let mut entry = json!({ "event": "ingest", "outcome": outcome, "to": envelope.to, "size": envelope.size });
-        if let (Some(e), Some(x)) = (entry.as_object_mut(), extra.as_object()) {
+    let domain = envelope
+        .to
+        .rsplit_once('@')
+        .map(|(_, d)| d.to_ascii_lowercase())
+        .unwrap_or_default();
+    let emit = |level, outcome: &str, extra: serde_json::Value| {
+        let mut f = json!({ "outcome": outcome, "to": envelope.to, "domain": domain, "size": envelope.size });
+        if let (Some(e), Some(x)) = (f.as_object_mut(), extra.as_object()) {
             e.extend(x.clone());
         }
-        entry.to_string()
+        obs::event(&env, level, "ingest", f);
     };
     match outcome {
         IngestOutcome::Accepted { raw_key } => {
-            console_log!(
-                "{}",
-                log("accepted", json!({ "raw_key": raw_key.as_str() }))
+            emit(
+                Level::Info,
+                "accepted",
+                json!({ "raw_key": raw_key.as_str() }),
             );
             Ok(())
         }
         IngestOutcome::AcceptedNotQueued { raw_key, error } => {
             // Já está no R2: aceitar. A reconciliação (seção 6.6) enfileira.
-            console_error!(
-                "{}",
-                log(
-                    "accepted_not_queued",
-                    json!({ "raw_key": raw_key.as_str(), "error": error.0 })
-                )
+            emit(
+                Level::Error,
+                "accepted_not_queued",
+                json!({ "raw_key": raw_key.as_str(), "error": error.0 }),
             );
             Ok(())
         }
         IngestOutcome::Rejected { reason } => {
-            console_log!("{}", log("rejected", json!({ "reason": reason })));
+            emit(Level::Warn, "rejected", json!({ "reason": reason }));
             message.set_reject(reason);
             Ok(())
         }
         IngestOutcome::TemporaryFailure { error } => {
-            console_error!("{}", log("temporary_failure", json!({ "error": error.0 })));
+            emit(
+                Level::Error,
+                "temporary_failure",
+                json!({ "error": error.0 }),
+            );
             Err(Error::RustError(format!("ingest: {error}")))
         }
     }
@@ -153,9 +192,11 @@ async fn queue(batch: MessageBatch<serde_json::Value>, env: Env, _ctx: Context) 
     let messages = match batch.messages() {
         Ok(m) => m,
         Err(e) => {
-            console_error!(
-                "{}",
-                json!({ "event": "queue", "queue": batch.queue(), "error": e.to_string() })
+            obs::event(
+                &env,
+                Level::Error,
+                "queue",
+                json!({ "queue": batch.queue(), "error": e.to_string() }),
             );
             batch.retry_all();
             return Ok(());
@@ -166,7 +207,12 @@ async fn queue(batch: MessageBatch<serde_json::Value>, env: Env, _ctx: Context) 
         .map(|v| v.to_string())
         .unwrap_or_default();
     let (Ok(db), Ok(bucket)) = (env.d1("DB"), env.bucket("MAIL")) else {
-        console_error!(r#"{{"event":"queue","error":"bindings DB/MAIL ausentes"}}"#);
+        obs::event(
+            &env,
+            Level::Error,
+            "queue",
+            json!({ "error": "bindings DB/MAIL ausentes" }),
+        );
         batch.retry_all();
         return Ok(());
     };
@@ -186,9 +232,11 @@ async fn queue(batch: MessageBatch<serde_json::Value>, env: Env, _ctx: Context) 
         let job: IngestJob = match serde_json::from_value::<WireIngestJob>(msg.body().clone()) {
             Ok(w) => w.into(),
             Err(e) => {
-                console_error!(
-                    "{}",
-                    json!({ "event": "queue", "outcome": "invalid_job", "error": e.to_string(), "body": msg.body() })
+                obs::event(
+                    &env,
+                    Level::Error,
+                    "queue",
+                    json!({ "outcome": "invalid_job", "error": e.to_string(), "body": msg.body() }),
                 );
                 msg.ack();
                 continue;
@@ -198,39 +246,51 @@ async fn queue(batch: MessageBatch<serde_json::Value>, env: Env, _ctx: Context) 
         if batch.queue() == dlq {
             // Esgotou as tentativas: registra e libera. O .eml segue no R2.
             match index.give_up(&job.raw_key, None, WorkerClock.now()).await {
-                Ok(()) => msg.ack(),
+                Ok(()) => {
+                    obs::event(
+                        &env,
+                        Level::Warn,
+                        "dlq",
+                        json!({ "outcome": "gave_up", "raw_key": job.raw_key, "domain": job.domain }),
+                    );
+                    msg.ack();
+                }
                 Err(e) => {
-                    console_error!(
-                        "{}",
-                        json!({ "event": "dlq", "raw_key": job.raw_key, "error": e.0 })
+                    obs::event(
+                        &env,
+                        Level::Error,
+                        "dlq",
+                        json!({ "outcome": "error", "raw_key": job.raw_key, "domain": job.domain, "error": e.0 }),
                     );
                     msg.retry();
                 }
             }
-            console_log!(
-                "{}",
-                json!({ "event": "dlq", "outcome": "gave_up", "raw_key": job.raw_key })
-            );
             continue;
         }
 
         let (delivery, result) = handle_job(&process, &index, &job).await;
-        let entry = match &result {
+        let fields = match &result {
+            // `outcome` = modo de processamento, para a métrica separar full/partial.
             Ok(o) => json!({
-                "event": "process", "outcome": "ok", "raw_key": job.raw_key, "size": job.size,
-                "processing": o.processing.as_str(), "reprocessed": o.reprocessed, "hidden_by_rule": o.hidden_by_rule,
+                "outcome": o.processing.as_str(), "raw_key": job.raw_key, "domain": job.domain, "size": job.size,
+                "reprocessed": o.reprocessed, "hidden_by_rule": o.hidden_by_rule,
             }),
-            Err(e) => {
-                json!({ "event": "process", "outcome": "error", "raw_key": job.raw_key, "size": job.size, "error": e.to_string() })
-            }
+            Err(e) => json!({
+                "outcome": "error", "raw_key": job.raw_key, "domain": job.domain, "size": job.size, "error": e.to_string(),
+            }),
         };
         match delivery {
             Delivery::Ack => {
-                console_log!("{entry}");
+                let level = if result.is_ok() {
+                    Level::Info
+                } else {
+                    Level::Warn
+                };
+                obs::event(&env, level, "process", fields);
                 msg.ack();
             }
             Delivery::Retry => {
-                console_error!("{entry}");
+                obs::event(&env, Level::Error, "process", fields);
                 msg.retry();
             }
         }
@@ -238,10 +298,11 @@ async fn queue(batch: MessageBatch<serde_json::Value>, env: Env, _ctx: Context) 
     Ok(())
 }
 
-/// Reconciliação e pedidos de `just reprocess` (docs seção 6.6).
+/// Cron: reconciliação e pedidos de `just reprocess` (docs seção 6.6), depois
+/// retenção (Fase 9). Uma falha não impede a outra.
 #[event(scheduled)]
 async fn scheduled(_event: ScheduledEvent, env: Env, _ctx: ScheduleContext) {
-    let result = async {
+    let reconcile = async {
         let domains = configured_domains(&env)?;
         let db = env.d1("DB")?;
         let bucket = env.bucket("MAIL")?;
@@ -260,14 +321,57 @@ async fn scheduled(_event: ScheduledEvent, env: Env, _ctx: ScheduleContext) {
         .map_err(|e| Error::RustError(e.0))
     }
     .await;
-    match result {
-        Ok(r) => console_log!(
-            "{}",
-            json!({ "event": "reconcile", "missing": r.missing, "requested": r.requested, "requests_done": r.requests_done })
+    match reconcile {
+        Ok(r) => obs::event(
+            &env,
+            Level::Info,
+            "reconcile",
+            json!({
+                "outcome": "ok", "missing": r.missing, "requested": r.requested, "requests_done": r.requests_done,
+                "count": r.missing + r.requested,
+            }),
         ),
-        Err(e) => console_error!(
-            "{}",
-            json!({ "event": "reconcile", "error": e.to_string() })
+        Err(e) => obs::event(
+            &env,
+            Level::Error,
+            "reconcile",
+            json!({ "outcome": "error", "error": e.to_string() }),
+        ),
+    }
+
+    let retention = async {
+        let db = env.d1("DB")?;
+        let bucket = env.bucket("MAIL")?;
+        let index = D1Index { db: &db };
+        Retention {
+            store: &index,
+            blobs: &R2Blobs { bucket: &bucket },
+            clock: &WorkerClock,
+            policy: RetentionPolicy {
+                trash_days: var_u64(&env, "MAILBOX_RETENTION_TRASH_DAYS", 30) as u32,
+                spam_days: var_u64(&env, "MAILBOX_RETENTION_SPAM_DAYS", 30) as u32,
+                hidden_days: var_u64(&env, "MAILBOX_RETENTION_HIDDEN_DAYS", 30) as u32,
+            },
+            batch: var_u64(&env, "MAILBOX_RETENTION_BATCH", 50) as usize,
+        }
+        .run()
+        .await
+        .map_err(|e| Error::RustError(e.0))
+    }
+    .await;
+    match retention {
+        Ok(0) => {}
+        Ok(n) => obs::event(
+            &env,
+            Level::Info,
+            "retention",
+            json!({ "outcome": "purged", "count": n }),
+        ),
+        Err(e) => obs::event(
+            &env,
+            Level::Error,
+            "retention",
+            json!({ "outcome": "error", "error": e.to_string() }),
         ),
     }
 }

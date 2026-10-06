@@ -1,6 +1,8 @@
 //! Alterações da API no D1 (Fase 7): flags, pastas, lote e regras.
 
-use mailbox_application::{MailWriter, MessagePatch, PortError, RuleStore};
+use mailbox_application::{
+    Cutoffs, Expired, MailWriter, MessagePatch, PortError, RetentionStore, RuleStore,
+};
 use mailbox_domain::{Folder, MatchPattern, MessageId, Rule, RuleAction, RuleId};
 use serde::Deserialize;
 use serde_json::json;
@@ -20,14 +22,21 @@ fn opt_bool(v: Option<bool>) -> JsValue {
 }
 
 /// `SET` comum ao patch e ao lote: campo ausente (`NULL`) mantém o valor.
-const PATCH_SET: &str = "UPDATE messages SET is_read = COALESCE(?, is_read), \
-    is_starred = COALESCE(?, is_starred), folder = COALESCE(?, folder)";
+/// Mudar de pasta grava quando (a retenção da lixeira/spam conta daí). No
+/// `SET`, todas as expressões leem o valor antigo de `folder`.
+const PATCH_SET: &str = "UPDATE messages SET is_read = COALESCE(?1, is_read), \
+    is_starred = COALESCE(?2, is_starred), \
+    folder_changed_at = CASE WHEN ?3 IS NOT NULL AND ?3 <> folder THEN ?4 ELSE folder_changed_at END, \
+    folder = COALESCE(?3, folder)";
+/// Primeiro parâmetro depois dos 4 do `SET`.
+const FIRST_ID_PARAM: usize = 5;
 
 fn patch_args(p: &MessagePatch) -> Vec<JsValue> {
     vec![
         opt_bool(p.read),
         opt_bool(p.starred),
         p.folder.map(|f| s(f.as_str())).unwrap_or(JsValue::NULL),
+        JsValue::from_f64(worker::Date::now().as_millis() as f64),
     ]
 }
 
@@ -57,7 +66,7 @@ impl MailWriter for D1Index<'_> {
     async fn patch_message(&self, id: MessageId, patch: &MessagePatch) -> Result<bool, PortError> {
         let mut args = patch_args(patch);
         args.push(s(&id.to_string()));
-        let sql = format!("{PATCH_SET} WHERE id = ? AND deleted_at IS NULL");
+        let sql = format!("{PATCH_SET} WHERE id = ?{FIRST_ID_PARAM} AND deleted_at IS NULL");
         Ok(self.changes("patch_message", &sql, &args).await? > 0)
     }
 
@@ -65,14 +74,17 @@ impl MailWriter for D1Index<'_> {
         if ids.is_empty() {
             return Ok(0);
         }
-        // 3 parâmetros do SET + até 97 ids por statement (limite de 100).
+        // 4 parâmetros do SET + até 96 ids por statement (limite de 100).
         let mut total = 0;
-        for chunk in ids.chunks(97) {
+        for chunk in ids.chunks(96) {
             let mut args = patch_args(patch);
             args.extend(chunk.iter().map(|i| s(&i.to_string())));
+            let params: Vec<String> = (0..chunk.len())
+                .map(|i| format!("?{}", FIRST_ID_PARAM + i))
+                .collect();
             let sql = format!(
                 "{PATCH_SET} WHERE deleted_at IS NULL AND id IN ({})",
-                vec!["?"; chunk.len()].join(",")
+                params.join(",")
             );
             total += self.changes("patch_many", &sql, &args).await?;
         }
@@ -171,5 +183,115 @@ impl RuleStore for D1Index<'_> {
             )
             .await?
             > 0)
+    }
+}
+
+impl RetentionStore for D1Index<'_> {
+    async fn expired(&self, c: &Cutoffs, limit: usize) -> Result<Vec<Expired>, PortError> {
+        #[derive(Deserialize)]
+        struct Row {
+            id: String,
+            raw_key: String,
+            html_key: Option<String>,
+            att_keys: Option<String>,
+        }
+        let cut = |c: Option<mailbox_domain::UnixMs>| {
+            c.map(|t| JsValue::from_f64(t.as_i64() as f64))
+                .unwrap_or(JsValue::NULL)
+        };
+        let rows: Vec<Row> = self
+            .db
+            .prepare(
+                "SELECT m.id, m.raw_key, m.html_key, \
+                   (SELECT group_concat(a.r2_key, char(10)) FROM attachments a WHERE a.message_id = m.id) AS att_keys \
+                 FROM messages m WHERE \
+                   (?1 IS NOT NULL AND m.deleted_at IS NULL AND m.folder = 'trash' \
+                      AND COALESCE(m.folder_changed_at, m.received_at) < ?1) \
+                   OR (?2 IS NOT NULL AND m.deleted_at IS NULL AND m.folder = 'spam' \
+                      AND COALESCE(m.folder_changed_at, m.received_at) < ?2) \
+                   OR (?3 IS NOT NULL AND m.deleted_at IS NOT NULL AND m.deleted_at < ?3) \
+                 ORDER BY m.received_at LIMIT ?4",
+            )
+            .bind(&[cut(c.trash), cut(c.spam), cut(c.hidden), JsValue::from_f64(limit as f64)])
+            .map_err(err("expired"))?
+            .all()
+            .await
+            .map_err(err("expired"))?
+            .results()
+            .map_err(err("expired"))?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| {
+                let mut blob_keys = vec![r.raw_key];
+                blob_keys.extend(r.html_key);
+                blob_keys.extend(
+                    r.att_keys
+                        .iter()
+                        .flat_map(|k| k.split('\n').map(str::to_owned)),
+                );
+                Some(Expired {
+                    id: MessageId::parse(&r.id).ok()?,
+                    blob_keys,
+                })
+            })
+            .collect())
+    }
+
+    async fn purge(&self, ids: &[MessageId]) -> Result<(), PortError> {
+        #[derive(Deserialize)]
+        struct T {
+            thread_id: String,
+        }
+        for chunk in ids.chunks(100) {
+            let ph = vec!["?"; chunk.len()].join(",");
+            let args: Vec<JsValue> = chunk.iter().map(|i| s(&i.to_string())).collect();
+            // Threads afetadas, lidas antes de apagar.
+            let threads: Vec<T> = self
+                .db
+                .prepare(format!(
+                    "SELECT DISTINCT thread_id FROM messages WHERE id IN ({ph}) AND thread_id IS NOT NULL"
+                ))
+                .bind(&args)
+                .map_err(err("purge"))?
+                .all()
+                .await
+                .map_err(err("purge"))?
+                .results()
+                .map_err(err("purge"))?;
+            // Anexos saem em cascata (FK) e o FTS pelo trigger. Threads:
+            // recalcula as afetadas e remove as que ficaram vazias. Tudo numa
+            // transação (`batch`).
+            let mut batch = vec![self
+                .db
+                .prepare(format!("DELETE FROM messages WHERE id IN ({ph})"))
+                .bind(&args)
+                .map_err(err("purge"))?];
+            if !threads.is_empty() {
+                let tph = vec!["?"; threads.len()].join(",");
+                let targs: Vec<JsValue> = threads.iter().map(|t| s(&t.thread_id)).collect();
+                batch.push(
+                    self.db
+                        .prepare(format!(
+                            "UPDATE threads SET \
+                               message_count = (SELECT count(*) FROM messages m WHERE m.thread_id = threads.id AND m.deleted_at IS NULL), \
+                               last_message_at = COALESCE((SELECT max(received_at) FROM messages m WHERE m.thread_id = threads.id), last_message_at) \
+                             WHERE id IN ({tph})"
+                        ))
+                        .bind(&targs)
+                        .map_err(err("purge"))?,
+                );
+                batch.push(
+                    self.db
+                        .prepare(format!(
+                            "DELETE FROM threads WHERE id IN ({tph}) \
+                               AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.thread_id = threads.id)"
+                        ))
+                        .bind(&targs)
+                        .map_err(err("purge"))?,
+                );
+            }
+            self.db.batch(batch).await.map_err(err("purge"))?;
+        }
+        Ok(())
     }
 }

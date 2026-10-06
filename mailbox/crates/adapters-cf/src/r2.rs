@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use mailbox_application::{
-    BlobStore, IngestJob, PortError, RawListing, RawMailStore, RawObject, RawPage,
+    BlobPurge, BlobStore, IngestJob, PortError, RawListing, RawMailStore, RawObject, RawPage,
 };
 use mailbox_domain::{RawKey, UnixMs};
 use wasm_bindgen::prelude::*;
@@ -170,4 +170,16 @@ fn job_from_metadata(key: &str, size: u64, meta: &HashMap<String, String>) -> Op
         received_at,
         size,
     })
+}
+
+impl BlobPurge for R2Blobs<'_> {
+    async fn delete_many(&self, keys: &[String]) -> Result<(), PortError> {
+        if keys.is_empty() {
+            return Ok(());
+        }
+        self.bucket
+            .delete_multiple(keys.to_vec())
+            .await
+            .map_err(|e| PortError(format!("r2 delete ({} chaves): {e}", keys.len())))
+    }
 }

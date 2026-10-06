@@ -1,0 +1,323 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "mailbox",
+    "version": "1.0.0",
+    "description": "API da caixa de email pessoal na Cloudflare. Toda rota, exceto /api/ping, exige o Cloudflare Access (header Cf-Access-Jwt-Assertion, injetado pela borda). Mutações exigem Content-Type: application/json e mesma origem (CSRF). Datas em Unix ms. Paginação por cursor opaco."
+  },
+  "servers": [{ "url": "/" }],
+  "security": [{ "cloudflareAccess": [] }],
+  "paths": {
+    "/api/ping": {
+      "get": {
+        "summary": "Saúde",
+        "security": [],
+        "responses": { "200": { "description": "pong", "content": { "text/plain": { "schema": { "type": "string", "const": "pong" } } } } }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "summary": "Identidade autenticada pelo Access",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } } },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "summary": "Esta especificação",
+        "responses": { "200": { "description": "OpenAPI 3.1", "content": { "application/json": { "schema": { "type": "object" } } } } }
+      }
+    },
+    "/api/domains": {
+      "get": {
+        "summary": "Domínios, identidades e não lidos na entrada",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": {
+            "type": "object", "required": ["items"], "additionalProperties": false,
+            "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Domain" } } }
+          } } } },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/messages": {
+      "get": {
+        "summary": "Lista e busca",
+        "description": "Sem q: uma pasta (padrão inbox). Com q: termos com prefixo, todos obrigatórios, sem diferenciar acento; sem folder, olha todas as pastas. Ordem: mais recente primeiro.",
+        "parameters": [
+          { "name": "folder", "in": "query", "schema": { "$ref": "#/components/schemas/Folder" } },
+          { "name": "domain", "in": "query", "schema": { "type": "string" }, "description": "Filtra por domínio; ausente = caixa unificada" },
+          { "name": "q", "in": "query", "schema": { "type": "string" } },
+          { "name": "cursor", "in": "query", "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 } }
+        ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Page" } } } },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/messages/bulk": {
+      "post": {
+        "summary": "Altera várias mensagens",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["ids", "patch"], "additionalProperties": false,
+          "properties": {
+            "ids": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "$ref": "#/components/schemas/Id" } },
+            "patch": { "$ref": "#/components/schemas/MessagePatch" }
+          }
+        } } } },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": {
+            "type": "object", "required": ["updated"], "additionalProperties": false,
+            "properties": { "updated": { "type": "integer" } }
+          } } } },
+          "400": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "415": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/messages/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "get": {
+        "summary": "Detalhe",
+        "parameters": [{ "name": "remote_images", "in": "query", "schema": { "type": "string", "enum": ["0", "1"], "default": "0" }, "description": "1 = devolve o HTML com imagens remotas liberadas" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageDetail" } } } },
+          "400": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "patch": {
+        "summary": "Marca lido/estrela ou move de pasta",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessagePatch" } } } },
+        "responses": {
+          "200": { "description": "Item atualizado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ListItem" } } } },
+          "400": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "415": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/messages/{id}/raw": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "get": {
+        "summary": ".eml original (sempre download)",
+        "responses": {
+          "200": { "description": ".eml", "content": { "message/rfc822": { "schema": { "type": "string", "format": "binary" } } } },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/threads/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "get": {
+        "summary": "Conversa (mais antiga primeiro)",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Thread" } } } },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/attachments/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "get": {
+        "summary": "Anexo",
+        "description": "Sempre com X-Content-Type-Options: nosniff e CSP sandbox. Só PNG/JPEG/GIF/WebP são servidos inline; o resto como application/octet-stream para download.",
+        "responses": {
+          "200": { "description": "Conteúdo", "content": { "*/*": { "schema": { "type": "string", "format": "binary" } } } },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/rules": {
+      "get": {
+        "summary": "Regras de roteamento (inclui desabilitadas)",
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": {
+          "type": "object", "required": ["items"], "additionalProperties": false,
+          "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Rule" } } }
+        } } } } }
+      },
+      "post": {
+        "summary": "Cria regra",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RuleInput" } } } },
+        "responses": {
+          "201": { "description": "Criada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Rule" } } } },
+          "400": { "$ref": "#/components/responses/Error" },
+          "415": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/rules/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "summary": "Altera regra (campos ausentes ficam como estão)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RulePatch" } } } },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Rule" } } } },
+          "400": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "summary": "Apaga regra",
+        "responses": { "204": { "description": "Apagada" }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cloudflareAccess": { "type": "apiKey", "in": "header", "name": "Cf-Access-Jwt-Assertion", "description": "JWT RS256 do Cloudflare Access" }
+    },
+    "parameters": {
+      "Id": { "name": "id", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/Id" } }
+    },
+    "responses": {
+      "Error": { "description": "Erro", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    },
+    "schemas": {
+      "Id": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$", "description": "ULID" },
+      "UnixMs": { "type": "integer", "minimum": 0 },
+      "Folder": { "type": "string", "enum": ["inbox", "archive", "trash", "spam", "sent"] },
+      "Person": {
+        "type": "object", "required": ["name", "addr"], "additionalProperties": false,
+        "properties": { "name": { "type": ["string", "null"] }, "addr": { "type": "string" } }
+      },
+      "Me": {
+        "type": "object", "required": ["email"], "additionalProperties": false,
+        "properties": { "email": { "type": "string" } }
+      },
+      "Error": {
+        "type": "object", "required": ["error"], "additionalProperties": false,
+        "properties": { "error": {
+          "type": "object", "required": ["code", "message"], "additionalProperties": false,
+          "properties": {
+            "code": { "type": "string", "enum": ["bad_request", "unauthorized", "forbidden", "not_found", "unsupported_media_type", "internal", "unavailable"] },
+            "message": { "type": "string" }
+          }
+        } }
+      },
+      "Identity": {
+        "type": "object", "required": ["id", "address", "label", "is_default_from"], "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Id" }, "address": { "type": "string" },
+          "label": { "type": ["string", "null"] }, "is_default_from": { "type": "boolean" }
+        }
+      },
+      "Domain": {
+        "type": "object", "required": ["id", "name", "label", "color", "unread", "identities"], "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Id" }, "name": { "type": "string" }, "label": { "type": "string" },
+          "color": { "type": "string" }, "unread": { "type": "integer" },
+          "identities": { "type": "array", "items": { "$ref": "#/components/schemas/Identity" } }
+        }
+      },
+      "ListItem": {
+        "type": "object",
+        "required": ["id", "thread_id", "domain", "identity", "from", "subject", "snippet", "received_at", "is_read", "is_starred", "has_attachments", "folder", "processing"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Id" },
+          "thread_id": { "type": ["string", "null"] },
+          "domain": { "type": "string" },
+          "identity": { "type": ["string", "null"], "description": "Endereço pelo qual o email entrou" },
+          "from": { "oneOf": [{ "$ref": "#/components/schemas/Person" }, { "type": "null" }] },
+          "subject": { "type": ["string", "null"] },
+          "snippet": { "type": ["string", "null"] },
+          "received_at": { "$ref": "#/components/schemas/UnixMs" },
+          "is_read": { "type": "boolean" },
+          "is_starred": { "type": "boolean" },
+          "has_attachments": { "type": "boolean" },
+          "folder": { "$ref": "#/components/schemas/Folder" },
+          "processing": { "type": "string", "enum": ["full", "partial"], "description": "partial = modo leve: sem corpo; ofereça o .eml (raw_url)" }
+        }
+      },
+      "Page": {
+        "type": "object", "required": ["items", "next_cursor"], "additionalProperties": false,
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/ListItem" } },
+          "next_cursor": { "type": ["string", "null"] }
+        }
+      },
+      "Attachment": {
+        "type": "object", "required": ["id", "filename", "content_type", "size", "content_id", "is_inline", "url"], "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Id" }, "filename": { "type": ["string", "null"] },
+          "content_type": { "type": "string" }, "size": { "type": "integer" },
+          "content_id": { "type": ["string", "null"] }, "is_inline": { "type": "boolean" }, "url": { "type": "string" }
+        }
+      },
+      "MessageDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ListItem" },
+          {
+            "type": "object",
+            "required": ["to", "cc", "date", "message_id", "envelope_to", "size", "text", "html", "has_remote_images", "auth", "attachments", "raw_url"],
+            "properties": {
+              "to": { "type": "array", "items": { "$ref": "#/components/schemas/Person" } },
+              "cc": { "type": "array", "items": { "$ref": "#/components/schemas/Person" } },
+              "date": { "type": ["integer", "null"] },
+              "message_id": { "type": ["string", "null"] },
+              "envelope_to": { "type": "string" },
+              "size": { "type": "integer" },
+              "text": { "type": ["string", "null"] },
+              "html": { "type": ["string", "null"], "description": "Sanitizado. Exibir em <iframe sandbox> sem allow-scripts." },
+              "has_remote_images": { "type": "boolean" },
+              "auth": {
+                "type": "object", "required": ["spf", "dkim", "dmarc"], "additionalProperties": false,
+                "properties": { "spf": { "type": ["string", "null"] }, "dkim": { "type": ["string", "null"] }, "dmarc": { "type": ["string", "null"] } }
+              },
+              "attachments": { "type": "array", "items": { "$ref": "#/components/schemas/Attachment" } },
+              "raw_url": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "Thread": {
+        "type": "object", "required": ["id", "subject", "messages"], "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Id" }, "subject": { "type": ["string", "null"] },
+          "messages": { "type": "array", "items": { "$ref": "#/components/schemas/ListItem" } }
+        }
+      },
+      "MessagePatch": {
+        "type": "object", "minProperties": 1, "additionalProperties": false,
+        "properties": {
+          "read": { "type": ["boolean", "null"] }, "starred": { "type": ["boolean", "null"] },
+          "folder": { "oneOf": [{ "$ref": "#/components/schemas/Folder" }, { "type": "null" }] }
+        }
+      },
+      "RuleAction": { "type": "string", "enum": ["move", "archive", "mark_read", "reject"] },
+      "Rule": {
+        "type": "object", "required": ["id", "priority", "match_address", "action", "folder", "enabled"], "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Id" }, "priority": { "type": "integer" },
+          "match_address": { "type": "string", "description": "*@dominio.com ou endereco@dominio.com" },
+          "action": { "$ref": "#/components/schemas/RuleAction" },
+          "folder": { "oneOf": [{ "$ref": "#/components/schemas/Folder" }, { "type": "null" }], "description": "Só em action=move" },
+          "enabled": { "type": "boolean" }
+        }
+      },
+      "RuleInput": {
+        "type": "object", "required": ["match_address", "action"], "additionalProperties": false,
+        "properties": {
+          "match_address": { "type": "string" }, "action": { "$ref": "#/components/schemas/RuleAction" },
+          "folder": { "$ref": "#/components/schemas/Folder" },
+          "priority": { "type": "integer", "default": 100 }, "enabled": { "type": "boolean", "default": true }
+        }
+      },
+      "RulePatch": {
+        "type": "object", "minProperties": 1, "additionalProperties": false,
+        "properties": {
+          "match_address": { "type": "string" }, "action": { "$ref": "#/components/schemas/RuleAction" },
+          "folder": { "$ref": "#/components/schemas/Folder" }, "priority": { "type": "integer" }, "enabled": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

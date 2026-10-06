@@ -116,7 +116,10 @@ impl JwksVerifier<'_> {
                 Ok(k) => {
                     keys.insert(kid.to_owned(), k.unchecked_into::<CryptoKey>());
                 }
-                Err(e) => worker::console_error!("chave {kid} do Access ignorada: {e:?}"),
+                Err(e) => worker::console_error!(
+                    "{}",
+                    serde_json::json!({ "level": "error", "event": "auth", "outcome": "bad_key", "kid": kid, "error": format!("{e:?}") })
+                ),
             }
         }
         CACHE.with(|c| {

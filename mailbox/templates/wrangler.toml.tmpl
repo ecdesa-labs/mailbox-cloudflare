@@ -55,10 +55,21 @@ MAILBOX_DLQ = "$dlq"
 MAILBOX_FULL_MAX_BYTES = "524288"
 MAILBOX_MAX_ATTACHMENTS = "30"
 MAILBOX_RECONCILE_BUDGET = "50"
+# Retenção (dias; 0 = nunca): lixeira e spam contam de quando a mensagem foi
+# para lá; ocultas por regra `reject`, de quando foram ocultadas.
+MAILBOX_RETENTION_TRASH_DAYS = "30"
+MAILBOX_RETENTION_SPAM_DAYS = "30"
+MAILBOX_RETENTION_HIDDEN_DAYS = "30"
+MAILBOX_RETENTION_BATCH = "50"
 # Cloudflare Access (docs seção 6.5). Vazios = API negada (falha fechada).
 MAILBOX_ACCESS_TEAM = "$access_team"
 MAILBOX_ACCESS_AUD = "$access_aud"
 MAILBOX_ALLOWED_EMAILS = "$allowed_emails"
+
+# Métricas (Fase 9). Free: 100 mil pontos por dia.
+[[analytics_engine_datasets]]
+binding = "METRICS"
+dataset = "${worker}_events"
 
 [observability]
 enabled = true

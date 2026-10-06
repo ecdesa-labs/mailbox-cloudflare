@@ -14,10 +14,20 @@ use mailbox_mime::{restore_remote_images, REMOTE_SRC_ATTR};
 use serde_json::{json, Value};
 use worker::*;
 
+/// Especificação da API (Fase 9). O `just contract` confere que ela bate
+/// com as rotas abaixo e com o JSON que a API devolve.
+const OPENAPI: &str = include_str!("../openapi.json");
+
 /// `identity` já validada em `authorize` (ou `None` só no `/api/ping`).
 pub fn router(identity: Option<Identity>) -> Router<'static, Option<Identity>> {
     Router::with_data(identity)
         .get("/api/ping", |_, _| Response::ok("pong"))
+        .get("/api/openapi.json", |_, _| {
+            let mut r = Response::ok(OPENAPI)?;
+            r.headers_mut()
+                .set("Content-Type", "application/json; charset=utf-8")?;
+            Ok(r)
+        })
         .get("/api/me", |_, ctx| match &ctx.data {
             Some(i) => Response::from_json(&json!({ "email": i.email })),
             None => error_response(401, "unauthorized", "sem identidade"),
@@ -132,9 +142,11 @@ fn handle(result: std::result::Result<Response, ApiError>) -> Result<Response> {
         Ok(r) => Ok(r),
         Err(e) => {
             if e.status >= 500 {
-                console_error!(
-                    "{}",
-                    json!({ "event": "api", "status": e.status, "error": e.message })
+                // O detalhe do erro só existe aqui; a métrica da rota sai no `fetch`.
+                crate::obs::log(
+                    crate::obs::Level::Error,
+                    "api_error",
+                    &json!({ "status": e.status, "error": e.message }),
                 );
             }
             error_response(e.status, e.code, &e.message)
@@ -401,8 +413,11 @@ pub async fn authorize(req: &Request, env: &Env) -> std::result::Result<Identity
         &var("MAILBOX_ACCESS_AUD"),
         &var("MAILBOX_ALLOWED_EMAILS"),
     ) else {
-        console_error!(
-            r#"{{"event":"auth","error":"MAILBOX_ACCESS_TEAM/MAILBOX_ACCESS_AUD ausentes"}}"#
+        crate::obs::event(
+            env,
+            crate::obs::Level::Error,
+            "auth",
+            json!({ "outcome": "not_configured", "error": "MAILBOX_ACCESS_TEAM/MAILBOX_ACCESS_AUD ausentes" }),
         );
         return Err(
             error_response(503, "unavailable", "autenticação não configurada")
@@ -421,14 +436,24 @@ pub async fn authorize(req: &Request, env: &Env) -> std::result::Result<Identity
     {
         Ok(i) => Ok(i),
         Err(AuthError::Keys(e)) => {
-            console_error!("{}", json!({ "event": "auth", "error": e.0 }));
+            crate::obs::event(
+                env,
+                crate::obs::Level::Error,
+                "auth",
+                json!({ "outcome": "keys_unavailable", "error": e.0 }),
+            );
             Err(
                 error_response(503, "unavailable", "chaves do Access indisponíveis")
                     .unwrap_or_else(|_| Response::empty().unwrap().with_status(503)),
             )
         }
         Err(e) => {
-            console_log!("{}", json!({ "event": "auth", "denied": e.to_string() }));
+            crate::obs::event(
+                env,
+                crate::obs::Level::Warn,
+                "auth",
+                json!({ "outcome": "denied", "reason": e.to_string() }),
+            );
             Err(unauthorized("acesso negado"))
         }
     }
