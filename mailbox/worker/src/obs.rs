@@ -73,3 +73,18 @@ pub fn metric(env: &Env, name: &str, level: Level, fields: &Value) {
         .build();
     let _ = ds.write_data_point(&point);
 }
+
+/// Memória linear do wasm, em MiB. Ela só cresce durante a vida do isolate,
+/// então é o pico até agora: calibra o modo leve contra os 128 MB do isolate.
+pub fn wasm_mib() -> f64 {
+    use worker::wasm_bindgen::JsCast;
+    let bytes = worker::wasm_bindgen::memory()
+        .dyn_into::<worker::js_sys::WebAssembly::Memory>()
+        .map(|m| {
+            m.buffer()
+                .unchecked_into::<worker::js_sys::ArrayBuffer>()
+                .byte_length()
+        })
+        .unwrap_or(0);
+    (bytes as f64 / 1024.0 / 1024.0 * 10.0).round() / 10.0
+}

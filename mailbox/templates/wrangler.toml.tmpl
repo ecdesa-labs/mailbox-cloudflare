@@ -29,8 +29,8 @@ migrations_dir = "migrations"
 queue = "$queue"
 binding = "INGEST"
 
-# Plano Free: 10 ms de CPU e 50 sub-requisições por invocação. Um email por
-# invocação, para cada um ter o orçamento inteiro.
+# Um email por invocação: cada um tem o orçamento inteiro (CPU no Free,
+# memória no Paid) e uma falha não atrasa os outros.
 [[queues.consumers]]
 queue = "$queue"
 max_batch_size = 1
@@ -57,16 +57,18 @@ crons = ["*/10 * * * *"]
 [vars]
 MAILBOX_DOMAINS = "$domains"
 MAILBOX_DLQ = "$dlq"
-# Acima disso, modo leve (só headers). Calibrar pelo CPU real (observability).
-MAILBOX_FULL_MAX_BYTES = "524288"
-MAILBOX_MAX_ATTACHMENTS = "30"
-MAILBOX_RECONCILE_BUDGET = "50"
+# Limiares do plano $plan (PLAN_LIMITS em scripts/setup_instance.py). Acima de
+# FULL_MAX_BYTES, modo leve (só headers); o evento `process` traz `wasm_mib`
+# para calibrar contra os 128 MB do isolate.
+MAILBOX_FULL_MAX_BYTES = "$full_max_bytes"
+MAILBOX_MAX_ATTACHMENTS = "$max_attachments"
+MAILBOX_RECONCILE_BUDGET = "$reconcile_budget"
 # Retenção (dias; 0 = nunca): lixeira e spam contam de quando a mensagem foi
 # para lá; ocultas por regra `reject`, de quando foram ocultadas.
 MAILBOX_RETENTION_TRASH_DAYS = "30"
 MAILBOX_RETENTION_SPAM_DAYS = "30"
 MAILBOX_RETENTION_HIDDEN_DAYS = "30"
-MAILBOX_RETENTION_BATCH = "50"
+MAILBOX_RETENTION_BATCH = "$retention_batch"
 # Cloudflare Access (docs seção 6.5). Vazios = API negada (falha fechada).
 MAILBOX_ACCESS_TEAM = "$access_team"
 MAILBOX_ACCESS_AUD = "$access_aud"

@@ -339,12 +339,21 @@ Next.js estático em `mailbox/web`, servido pelo mesmo Worker.
   (Para + Cc); a cota diária começa conservadora e cresce com o uso. O
   `Message-ID` de quem recebe é gerado pela Cloudflare; a cópia em Enviados
   usa o id que o serviço devolve. Envio ainda sem anexos.
-- No plano Free, cada invocação tem 10 ms de CPU e 50 sub-requisições
-  (R2, D1 e fila contam). Receber e gravar não depende do tamanho (o `.eml`
-  vai por stream para o R2). Emails acima de 512 KiB são processados em
-  **modo leve** (remetente, assunto e data; o `.eml` fica para download), e
-  emails com mais de 30 anexos têm o texto indexado mas anexos e HTML só no
-  `.eml`. Os limiares ficam em `[vars]` no template do `wrangler.toml`.
+- Receber e gravar não depende do tamanho (o `.eml` vai por stream para o
+  R2). Processar sim: emails acima de um limiar vão para o **modo leve**
+  (remetente, assunto e data; o `.eml` fica para download), e emails com
+  anexos demais têm o texto indexado mas anexos e HTML só no `.eml`. Os
+  limiares seguem o plano da instância (`just configure --plan free|paid`):
+
+  | | Free | Paid |
+  |---|---|---|
+  | Modo leve acima de | 512 KiB (10 ms de CPU) | 16 MiB (128 MB de memória) |
+  | Máximo de anexos processados | 30 | 200 |
+  | Reconciliação por execução | 50 | 500 |
+  | Retenção por execução | 50 | 500 |
+
+  No Paid, o pico de memória do wasm medido foi ~2,5x o tamanho do `.eml`; o
+  evento `process` traz `wasm_mib` para recalibrar.
 - No plano Free, mensagens da fila e da DLQ expiram em 24 h; o reprocessamento
   sempre parte do `.eml` no R2.
 - `wrangler d1 export` não exporta tabelas virtuais (a busca FTS5). Para

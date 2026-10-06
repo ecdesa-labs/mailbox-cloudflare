@@ -273,10 +273,11 @@ async fn queue(batch: MessageBatch<serde_json::Value>, env: Env, _ctx: Context) 
             // `outcome` = modo de processamento, para a métrica separar full/partial.
             Ok(o) => json!({
                 "outcome": o.processing.as_str(), "raw_key": job.raw_key, "domain": job.domain, "size": job.size,
-                "reprocessed": o.reprocessed, "hidden_by_rule": o.hidden_by_rule,
+                "reprocessed": o.reprocessed, "hidden_by_rule": o.hidden_by_rule, "wasm_mib": obs::wasm_mib(),
             }),
             Err(e) => json!({
                 "outcome": "error", "raw_key": job.raw_key, "domain": job.domain, "size": job.size, "error": e.to_string(),
+                "wasm_mib": obs::wasm_mib(),
             }),
         };
         match delivery {

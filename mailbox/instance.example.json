@@ -9,6 +9,7 @@
   "access_aud": "",
   "allowed_emails": [],
   "metrics": false,
+  "plan": "free",
   "domains": [
     {
       "id": "01M44NRD000000000000000001",

@@ -62,8 +62,8 @@ pub struct ProcessMessage<'a, B, I, C, G> {
     /// Acima disso, modo leve (só headers).
     pub full_max_bytes: u64,
     /// Acima disso, anexos e HTML ficam só no `.eml` (texto ainda é
-    /// indexado). Cada anexo é uma escrita no R2, e o plano Free permite 50
-    /// sub-requisições por invocação.
+    /// indexado). Cada anexo é uma escrita no R2 e uma linha no D1, e os dois
+    /// contam no limite por invocação (50 no Free; ver `PLAN_LIMITS`).
     pub max_attachments: usize,
 }
 

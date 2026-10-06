@@ -105,6 +105,18 @@ class InstanciaNova(unittest.TestCase):
         self.assertIn('dataset = "mailbox_events"', w)
         self.assertIs(self.cfg()["metrics"], True)
 
+    def test_plano(self):
+        run(self.root, "--domain", "a.com", "--label", "A", "--color", "#111")
+        w = (self.root / "wrangler.toml").read_text()
+        self.assertIn('MAILBOX_FULL_MAX_BYTES = "524288"', w, "free por padrão")
+        self.assertEqual(run(self.root, "--plan", "paid")[0], 0)
+        w = (self.root / "wrangler.toml").read_text()
+        self.assertIn('MAILBOX_FULL_MAX_BYTES = "16777216"', w)
+        self.assertIn('MAILBOX_MAX_ATTACHMENTS = "200"', w)
+        self.assertEqual(self.cfg()["plan"], "paid")
+        with self.assertRaises(SystemExit):  # o argparse recusa
+            run(self.root, "--plan", "gold")
+
     def test_escapa_aspas_no_sql(self):
         run(self.root, "--domain", "a.com", "--label", "D'Ávila", "--color", "#111")
         seed = (self.root / "migrations/0002_seed_domains.sql").read_text()

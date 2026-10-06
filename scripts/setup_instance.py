@@ -23,6 +23,9 @@ Exemplos (rodar da raiz do repositório):
     # Só gravar o id do D1 depois do `just remote-bootstrap`
     python3 scripts/setup_instance.py --database-id 0f2c...
 
+    # Plano Workers Paid: limiares de processamento maiores
+    python3 scripts/setup_instance.py --plan paid
+
     # CI: falha se algum arquivo gerado foi editado à mão
     python3 scripts/setup_instance.py --check
 
@@ -59,8 +62,20 @@ DEFAULTS = {
     # Analytics Engine (Fase 9). Desligado por padrão: a conta precisa ativar
     # o produto no painel antes, senão o deploy falha (código 10089).
     "metrics": False,
+    # Plano Workers: decide os limiares de processamento (PLAN_LIMITS).
+    "plan": "free",
 }
 RESOURCE_KEYS = ("worker", "bucket", "database", "queue", "dlq")
+
+# Limiares por plano (vars do wrangler.toml). Free: 10 ms de CPU, 50
+# sub-requisições e 50 consultas D1 por invocação. Paid: 30 s de CPU, 10 mil
+# sub-requisições, 1000 consultas; a memória (128 MB) passa a mandar. Medido
+# em 2026-10-06: o pico do wasm no processamento é ~2,5x o tamanho do .eml
+# (23,4 MiB -> 59,6 MiB), fora as cópias do lado JS; 16 MiB deixa folga.
+PLAN_LIMITS = {
+    "free": {"full_max_bytes": 512 * 1024, "max_attachments": 30, "reconcile_budget": 50, "retention_batch": 50},
+    "paid": {"full_max_bytes": 16 * 1024 * 1024, "max_attachments": 200, "reconcile_budget": 500, "retention_batch": 500},
+}
 
 # Nomes de Worker, bucket R2, D1 e filas: minúsculas, dígitos e hífen, 3 a 63.
 RESOURCE_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$")
@@ -108,6 +123,8 @@ def validate(cfg: dict) -> None:
         raise ConfigError(f"access_aud inválido: {cfg['access_aud']!r} (Application Audience Tag, hexadecimal)")
     if not isinstance(cfg["metrics"], bool):
         raise ConfigError("metrics precisa ser true ou false")
+    if cfg["plan"] not in PLAN_LIMITS:
+        raise ConfigError(f"plan inválido: {cfg['plan']!r} (free ou paid)")
     if bool(cfg["access_team"]) != bool(cfg["access_aud"]):
         raise ConfigError("access_team e access_aud andam juntos")
     for e in cfg["allowed_emails"]:
@@ -171,6 +188,8 @@ def apply_args(cfg: dict, args: argparse.Namespace) -> dict:
         cfg["access_aud"] = args.access_aud.strip().lower()
     if args.metrics is not None:
         cfg["metrics"] = args.metrics == "on"
+    if args.plan is not None:
+        cfg["plan"] = args.plan
     if args.allowed_email:
         cfg["allowed_emails"] = [e.strip().lower() for e in args.allowed_email if e.strip()]
 
@@ -209,6 +228,8 @@ def render(root: Path, cfg: dict) -> dict[Path, str]:
         {k: cfg[k] for k in (*RESOURCE_KEYS, "database_id", "access_team", "access_aud")},
         domains=",".join(d["name"] for d in cfg["domains"]),
         allowed_emails=",".join(cfg["allowed_emails"]),
+        plan=cfg["plan"],
+        **{k: str(v) for k, v in PLAN_LIMITS[cfg["plan"]].items()},
         metrics_block=(
             "# Métricas (Fase 9). Free: 100 mil pontos por dia.\n"
             "[[analytics_engine_datasets]]\n"
@@ -240,7 +261,7 @@ def render(root: Path, cfg: dict) -> dict[Path, str]:
 
 def dump(cfg: dict) -> str:
     ordered = {k: cfg[k] for k in (*RESOURCE_KEYS[:3], "database_id", *RESOURCE_KEYS[3:])}
-    ordered |= {k: cfg[k] for k in ("access_team", "access_aud", "allowed_emails", "metrics")}
+    ordered |= {k: cfg[k] for k in ("access_team", "access_aud", "allowed_emails", "metrics", "plan")}
     ordered["domains"] = cfg["domains"]
     return json.dumps(ordered, indent=2, ensure_ascii=False) + "\n"
 
@@ -273,6 +294,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     a.add_argument("--allowed-email", action="append", default=[], help="email permitido (repetível; vazio = quem a política do Access deixar)")
 
     p.add_argument("--metrics", choices=["on", "off"], help="métricas no Analytics Engine (ative o produto no painel antes)")
+    p.add_argument("--plan", choices=sorted(PLAN_LIMITS), help="plano Workers da conta: limiares de processamento (padrão: free)")
 
     p.add_argument("--check", action="store_true", help="não escreve; falha se os gerados estão desatualizados")
     p.add_argument("--root", type=Path, default=ROOT, help=argparse.SUPPRESS)
