@@ -55,7 +55,8 @@ export function Reader({ id, onBack, onAct, onReply }: { id: string; onBack: () 
         </button>
         {data && <Toolbar detail={data} onAct={onAct} onReply={onReply} />}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* Coluna flex: o artigo ocupa a altura que sobra e o iframe herda uma altura definida. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {message.isLoading ? (
           <ReaderSkeleton />
         ) : message.isError ? (
@@ -272,7 +273,7 @@ function Body({ detail, remote, onLoadRemote, compact }: {
   const visibleAttachments = detail.attachments.filter((a) => !a.is_inline || !detail.html?.includes(a.url))
 
   return (
-    <article className={cn('flex flex-col gap-4', compact ? 'p-4' : 'min-h-full p-5 sm:p-6')}>
+    <article className={cn('flex flex-col gap-4', compact ? 'p-4' : 'flex-1 p-5 sm:p-6')}>
       <header>
         {!compact && (
           <>
