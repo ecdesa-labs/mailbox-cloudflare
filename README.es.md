@@ -14,6 +14,19 @@ servidor de correo propio y sin proveedor de buzón de pago.
 > marca de Cloudflare, Inc. y aparece en el nombre solo para indicar la
 > plataforma.
 
+## Capturas
+
+Datos ficticios (`just front-demo`), tema claro. La interfaz está en portugués
+(Brasil).
+
+![Bandeja unificada con dos dominios y un correo HTML abierto, con las imágenes remotas cargadas](docs/screenshots/caixa-de-entrada.png)
+
+| Conversación agrupada | Responder a todos |
+|---|---|
+| ![Conversación con cuatro mensajes, los dos últimos abiertos](docs/screenshots/conversa.png) | ![Redactor respondiendo a todos, con el remitente en el color del dominio](docs/screenshots/responder.png) |
+
+![Lista de atajos de teclado](docs/screenshots/atalhos.png)
+
 ## Propuesta
 
 - **Uso propio.** Un único dueño, varios dominios, una bandeja unificada con
@@ -114,6 +127,8 @@ Todas las opciones: `just configure --help`.
 | `just dev` | Ejecuta en local con `wrangler dev` (D1, R2 y colas simulados) |
 | `just contract` | Pruebas de contrato de la API con Worker, D1, R2 y colas locales |
 | `just front-dev` | Aplicación web en local con datos de ejemplo (sin API), en `localhost:3000` |
+| `just front-demo` | Aplicación web con el buzón de demostración (datos ficticios), en `localhost:3101` |
+| `just screenshots` | Regenera las capturas de `docs/screenshots` (requiere un navegador Chromium) |
 | `just front-build` | Genera la aplicación web estática en `mailbox/web/out` (`deploy` ya lo hace) |
 | `just email-enable` | Activa Email Routing en los dominios de la instancia (reemplaza los MX) |
 | `just email-route <dirección>` | Envía una dirección específica al Worker |
@@ -197,8 +212,8 @@ wrangler, fuera del proyecto), pero identifican tu cuenta.
 ```
 mailbox-cloudflare/
   justfile              flujo de punta a punta
-  docs/                 guía de instalación (pt-BR, en y es)
-  scripts/              setup_instance.py, email_address.py, contract_test.py y pruebas
+  docs/                 guía de instalación (pt-BR, en y es) y capturas
+  scripts/              setup_instance.py, email_address.py, contract_test.py, screenshots.mjs y pruebas
   mailbox/              el producto
     crates/
       domain/           entidades, value objects y reglas; puro, probado en nativo

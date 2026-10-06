@@ -16,8 +16,9 @@ import type {
 import { mockApi } from './mock';
 
 const BASE_URL = '/api';
-// Mock apenas quando explicitamente ativado com NEXT_PUBLIC_MOCK === '1'
-const USE_MOCK = process.env.NEXT_PUBLIC_MOCK === '1';
+// Mock apenas quando explicitamente ativado: NEXT_PUBLIC_MOCK=1 (fixtures de
+// teste) ou =demo (caixa de demonstração dos prints).
+const USE_MOCK = process.env.NEXT_PUBLIC_MOCK === '1' || process.env.NEXT_PUBLIC_MOCK === 'demo';
 
 class ApiClient {
   private async request<T>(

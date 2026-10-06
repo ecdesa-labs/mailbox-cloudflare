@@ -14,6 +14,19 @@ mail server of your own and no paid mailbox provider.
 > trademark of Cloudflare, Inc. and appears in the name only to indicate the
 > platform.
 
+## Screenshots
+
+Fictional data (`just front-demo`), light theme. The interface is in
+Portuguese (Brazil).
+
+![Unified inbox with two domains and an HTML email open, remote images loaded](docs/screenshots/caixa-de-entrada.png)
+
+| Grouped conversation | Reply all |
+|---|---|
+| ![Conversation with four messages, the last two expanded](docs/screenshots/conversa.png) | ![Composer replying to all, with the sender in the domain's color](docs/screenshots/responder.png) |
+
+![Keyboard shortcuts list](docs/screenshots/atalhos.png)
+
 ## Goals
 
 - **Single owner.** One person, several domains, a unified inbox with a per-domain view.
@@ -112,6 +125,8 @@ All options: `just configure --help`.
 | `just dev` | Runs locally with `wrangler dev` (simulated D1, R2 and queues) |
 | `just contract` | API contract tests against a local Worker, D1, R2 and queues |
 | `just front-dev` | Web app locally with fixtures (no API), on `localhost:3000` |
+| `just front-demo` | Web app with the demo mailbox (fictional data), on `localhost:3101` |
+| `just screenshots` | Regenerates the images in `docs/screenshots` (needs a Chromium browser) |
 | `just front-build` | Builds the static web app into `mailbox/web/out` (`deploy` already does it) |
 | `just email-enable` | Enables Email Routing on the instance's domains (replaces MX) |
 | `just email-route <address>` | Sends one specific address to the Worker |
@@ -195,8 +210,8 @@ wrangler login, outside the project), but they do identify your account.
 ```
 mailbox-cloudflare/
   justfile              end-to-end workflow
-  docs/                 installation guide (pt-BR, en and es)
-  scripts/              setup_instance.py, email_address.py, contract_test.py and tests
+  docs/                 installation guide (pt-BR, en and es) and screenshots
+  scripts/              setup_instance.py, email_address.py, contract_test.py, screenshots.mjs and tests
   mailbox/              the product
     crates/
       domain/           entities, value objects and rules; pure, tested natively

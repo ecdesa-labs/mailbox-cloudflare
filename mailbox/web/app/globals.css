@@ -102,4 +102,9 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
+  /* A lista nativa do <select> não herda o fundo transparente do campo:
+     sem isso, no tema escuro o texto claro fica sobre fundo branco. */
+  option {
+    @apply bg-popover text-popover-foreground;
+  }
 }

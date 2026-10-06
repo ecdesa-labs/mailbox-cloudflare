@@ -223,6 +223,23 @@ front-build: front-install
 front-dev: front-install
     cd "{{ web }}" && NEXT_PUBLIC_MOCK=1 NEXT_TELEMETRY_DISABLED=1 {{ pnpm }} dev
 
+# Front com a caixa de demonstração (dados fictícios dos prints), em http://localhost:3101
+front-demo: front-install
+    cd "{{ web }}" && NEXT_PUBLIC_MOCK=demo NEXT_TELEMETRY_DISABLED=1 {{ pnpm }} dev --port 3101
+
+# Pare antes outro `next dev` do front: o Next só permite um por pasta.
+# Refaz os prints do README (docs/screenshots) com um Chromium headless
+screenshots: front-install
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp=$(mktemp -d)
+    # O pnpm sobe o next como filho: encerrar pelo comando, não pelo pid do subshell
+    # ([n] para o padrão não casar com a própria linha de comando).
+    trap 'pkill -f "[n]ext dev --port 3101" || true; rm -rf "$tmp"' EXIT
+    (cd "{{ web }}" && NEXT_PUBLIC_MOCK=demo NEXT_TELEMETRY_DISABLED=1 {{ pnpm }} dev --port 3101 >"$tmp/dev.log" 2>&1) &
+    for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3101/ && break; sleep 1; done
+    node scripts/screenshots.mjs http://localhost:3101 docs/screenshots "$tmp/profile"
+
 # Sobe local com wrangler dev (Worker + front gerado + D1/R2/filas locais)
 dev: front-build
     cd "{{ mailbox }}" && just dev

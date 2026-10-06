@@ -13,6 +13,18 @@ próprio e sem provedor pago de caixa postal.
 > Projeto independente, sem vínculo com a Cloudflare, Inc. "Cloudflare" é
 > marca da Cloudflare, Inc. e aparece no nome só para indicar a plataforma.
 
+## Telas
+
+Dados fictícios (`just front-demo`), tema claro.
+
+![Caixa unificada com dois domínios e um email HTML aberto, com as imagens remotas liberadas](docs/screenshots/caixa-de-entrada.png)
+
+| Conversa agrupada | Responder a todos |
+|---|---|
+| ![Conversa com quatro mensagens, as duas últimas abertas](docs/screenshots/conversa.png) | ![Compositor respondendo a todos, com o remetente na cor do domínio](docs/screenshots/responder.png) |
+
+![Lista de atalhos de teclado](docs/screenshots/atalhos.png)
+
 ## Proposta
 
 - **Uso próprio.** Um único dono, vários domínios, caixa unificada com visão por domínio.
@@ -109,6 +121,8 @@ Todas as opções: `just configure --help`.
 | `just dev` | Sobe local com `wrangler dev` (D1, R2 e filas simulados) |
 | `just contract` | Testes de contrato da API com Worker, D1, R2 e filas locais |
 | `just front-dev` | Front local com fixtures (sem API), em `localhost:3000` |
+| `just front-demo` | Front com a caixa de demonstração (dados fictícios), em `localhost:3101` |
+| `just screenshots` | Refaz os prints de `docs/screenshots` (precisa de um Chromium) |
 | `just front-build` | Gera o front estático em `mailbox/web/out` (o `deploy` já faz) |
 | `just email-enable` | Liga o Email Routing nos domínios da instância (substitui os MX) |
 | `just email-route <endereço>` | Manda um endereço específico para o Worker |
@@ -189,8 +203,8 @@ wrangler, fora do projeto), mas identificam a sua conta.
 ```
 mailbox-cloudflare/
   justfile              fluxo de ponta a ponta
-  docs/                 guia de instalação (pt-BR, en e es)
-  scripts/              setup_instance.py, email_address.py, contract_test.py e testes
+  docs/                 guia de instalação (pt-BR, en e es) e prints
+  scripts/              setup_instance.py, email_address.py, contract_test.py, screenshots.mjs e testes
   mailbox/              o produto
     crates/
       domain/           entidades, value objects e regras; puro, testado nativo

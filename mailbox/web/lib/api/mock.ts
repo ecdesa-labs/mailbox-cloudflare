@@ -14,7 +14,12 @@ import type {
   SendInput,
   SendResult,
 } from './types';
-import { domains, messages, messageDetails, rules } from './fixtures';
+import * as base from './fixtures';
+import * as demo from './demo';
+
+// `NEXT_PUBLIC_MOCK=demo`: caixa realista para os prints; `=1`: fixtures de teste.
+const data = process.env.NEXT_PUBLIC_MOCK === 'demo' ? demo : { ...base, me: 'user@exemplo.com.br' };
+const { domains, messages, messageDetails, rules } = data;
 
 // Simular latência de rede
 const ULID_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -45,7 +50,7 @@ function createError(status: number, code: ApiRequestError['code'], message: str
 export const mockApi = {
   async getMe(): Promise<Me> {
     await delay();
-    return { email: 'user@exemplo.com.br' };
+    return { email: data.me };
   },
 
   async getDomains(): Promise<{ items: Domain[] }> {
