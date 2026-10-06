@@ -1,6 +1,6 @@
 # Installation guide
 
-🌐 [Português (Brasil)](instalacao.pt-BR.md) · [Back to the README](../README.en.md)
+🌐 [Português (Brasil)](instalacao.pt-BR.md) · [Español](instalacion.es.md) · [Back to the README](../README.en.md)
 
 This guide takes you from zero to a working mailbox on your own domain,
 running on your own Cloudflare account. It doesn't assume you know the

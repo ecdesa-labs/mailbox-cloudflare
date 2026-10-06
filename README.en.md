@@ -1,6 +1,6 @@
 # mailbox-cloudflare
 
-🌐 [Português (Brasil)](README.pt-BR.md)
+🌐 [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md)
 
 A personal mailbox that runs entirely on Cloudflare: it receives, stores,
 indexes, sends and replies to email for one or more of your domains, with no
@@ -195,7 +195,7 @@ wrangler login, outside the project), but they do identify your account.
 ```
 mailbox-cloudflare/
   justfile              end-to-end workflow
-  docs/                 installation guide (pt-BR and en)
+  docs/                 installation guide (pt-BR, en and es)
   scripts/              setup_instance.py, email_address.py, contract_test.py and tests
   mailbox/              the product
     crates/

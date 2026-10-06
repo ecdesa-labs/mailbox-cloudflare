@@ -1,6 +1,6 @@
 # mailbox-cloudflare
 
-🌐 [English](README.en.md)
+🌐 [English](README.en.md) · [Español](README.es.md)
 
 Caixa de email pessoal que roda inteira na Cloudflare: recebe, guarda, indexa,
 envia e responde emails de um ou mais domínios seus, sem servidor de email
@@ -189,7 +189,7 @@ wrangler, fora do projeto), mas identificam a sua conta.
 ```
 mailbox-cloudflare/
   justfile              fluxo de ponta a ponta
-  docs/                 guia de instalação (pt-BR e en)
+  docs/                 guia de instalação (pt-BR, en e es)
   scripts/              setup_instance.py, email_address.py, contract_test.py e testes
   mailbox/              o produto
     crates/

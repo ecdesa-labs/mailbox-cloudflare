@@ -1,6 +1,6 @@
 # Guia de instalação
 
-🌐 [English](installation.en.md) · [Voltar ao README](../README.pt-BR.md)
+🌐 [English](installation.en.md) · [Español](instalacion.es.md) · [Voltar ao README](../README.pt-BR.md)
 
 Este guia leva você do zero até uma caixa de email funcionando no seu próprio
 domínio, rodando na sua conta da Cloudflare. Ele não supõe que você conheça o
