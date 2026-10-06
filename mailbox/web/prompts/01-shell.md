@@ -192,19 +192,23 @@ Erros: corpo `ApiError`. O cliente lança um erro tipado com `status`, `code` e
 o bastante para ter 2 páginas com `limit=20`):
 
 ```ts
+// IDs fictícios no formato ULID (26 caracteres), gerados por número.
+const fakeId = (n: number): Id => "01" + String(n).padStart(24, "0");
+
 export const domains: Domain[] = [
-  { id: "01M44NRD000000000000000001", name: "exemplo.com.br", label: "Exemplo",
+  { id: fakeId(1), name: "exemplo.com.br", label: "Exemplo",
     color: "#2563EB", unread: 3,
     identities: [
-      { id: "01M44NRD0000000000000000A1", address: "contato@exemplo.com.br", label: "Contato", is_default_from: true },
-      { id: "01M44NRD0000000000000000A2", address: "financeiro@exemplo.com.br", label: null, is_default_from: false },
+      { id: fakeId(101), address: "contato@exemplo.com.br", label: "Contato", is_default_from: true },
+      { id: fakeId(102), address: "financeiro@exemplo.com.br", label: null, is_default_from: false },
     ] },
-  { id: "01M44NRD000000000000000002", name: "pessoal.dev", label: "Pessoal",
+  { id: fakeId(2), name: "pessoal.dev", label: "Pessoal",
     color: "#E5484D", unread: 1,
     identities: [
-      { id: "01M44NRD0000000000000000B1", address: "github@pessoal.dev", label: "GitHub", is_default_from: false },
+      { id: fakeId(201), address: "github@pessoal.dev", label: "GitHub", is_default_from: false },
     ] },
 ];
+// Mensagens, anexos e threads também usam fakeId (ex.: fakeId(1000 + i)).
 ```
 
 Mensagens obrigatórias (gere o resto com variações realistas em português):
