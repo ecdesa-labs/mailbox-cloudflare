@@ -109,6 +109,27 @@ export interface RuleInput {
 
 export type RulePatch = Partial<RuleInput>;
 
+/** Destinatário: endereço ou `{ name, addr }`. */
+export type Recipient = string | { name?: string | null; addr: string };
+
+/** `POST /api/messages`. Resposta: `in_reply_to` = id da original. */
+export interface SendInput {
+  in_reply_to?: Id | null;
+  from_identity_id: Id;
+  to: Recipient[];
+  cc?: Recipient[];
+  subject: string;
+  text: string;
+  html?: string | null;
+}
+
+export interface SendResult {
+  id: Id;
+  thread_id: Id | null;
+  /** Cópia do enviado: no índice, na fila (aparece em instantes) ou perdida. */
+  stored: 'indexed' | 'pending' | 'lost';
+}
+
 export interface ApiError {
   error: {
     code:
@@ -118,7 +139,9 @@ export interface ApiError {
       | 'not_found'
       | 'unsupported_media_type'
       | 'internal'
-      | 'unavailable';
+      | 'unavailable'
+      | 'rejected'
+      | 'rate_limited';
     message: string;
   };
 }
@@ -138,7 +161,9 @@ export class ApiRequestError extends Error {
       | 'not_found'
       | 'unsupported_media_type'
       | 'internal'
-      | 'unavailable' = 'internal'
+      | 'unavailable'
+      | 'rejected'
+      | 'rate_limited' = 'internal'
   ) {
     super(message);
     this.name = 'ApiRequestError';

@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ListItem, MessagePatch } from '@/lib/api/types'
+import type { ListItem, MessagePatch, SendResult } from '@/lib/api/types'
+import { Composer, type ComposeInit } from './compose'
 import { MessageList } from './message-list'
 import { useNav } from './nav'
 import { Reader } from './reader'
@@ -20,6 +21,19 @@ export function MailApp() {
   const [collapsed, setCollapsed] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [notice, setNotice] = useState<Undo | null>(null)
+  const [compose, setCompose] = useState<(ComposeInit & { key: number }) | null>(null)
+  const openCompose = useCallback((init: ComposeInit) => setCompose({ ...init, key: Date.now() }), [])
+  const onSent = useCallback((r: SendResult) => {
+    setCompose(null)
+    setNotice({
+      text:
+        r.stored === 'indexed'
+          ? 'Mensagem enviada'
+          : r.stored === 'pending'
+            ? 'Mensagem enviada. Ela aparece em Enviados em instantes.'
+            : 'Mensagem enviada, mas a cópia não foi salva em Enviados.',
+    })
+  }, [])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const items = useRef<ListItem[]>([])
   const setItems = useCallback((next: ListItem[]) => {
@@ -92,6 +106,7 @@ export function MailApp() {
         onNavigate={(next) => navigate({ ...next, q: '' })}
         collapsed={collapsed}
         onCollapse={() => setCollapsed((c) => !c)}
+        onCompose={() => openCompose({ mode: 'new', domain: nav.domain || undefined })}
         open={drawer}
         onClose={() => setDrawer(false)}
       />
@@ -107,8 +122,9 @@ export function MailApp() {
           onClearSelection={() => setSelected(new Set())}
           onAct={onAct}
         />
-        <Reader id={nav.id} onBack={() => navigate({ id: '' })} onAct={onAct} />
+        <Reader id={nav.id} onBack={() => navigate({ id: '' })} onAct={onAct} onReply={(mode, original) => openCompose({ mode, original })} />
       </main>
+      {compose && <Composer key={compose.key} init={compose} onClose={() => setCompose(null)} onSent={onSent} />}
       {notice && <Toast notice={notice} onClose={() => setNotice(null)} />}
     </div>
   )

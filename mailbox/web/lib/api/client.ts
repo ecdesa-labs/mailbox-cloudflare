@@ -10,6 +10,8 @@ import type {
   MessagePatch,
   RuleInput,
   RulePatch,
+  SendInput,
+  SendResult,
 } from './types';
 import { mockApi } from './mock';
 
@@ -101,6 +103,12 @@ class ApiClient {
   async getThread(id: string): Promise<Thread> {
     if (USE_MOCK) return mockApi.getThread(id);
     return this.request('GET', `/threads/${id}`);
+  }
+
+  /** Envia ou responde. Não repetir em caso de erro 502: pode ter saído. */
+  async sendMessage(input: SendInput): Promise<SendResult> {
+    if (USE_MOCK) return mockApi.sendMessage(input);
+    return this.request('POST', '/messages', input);
   }
 
   // Mutações

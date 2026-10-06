@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import {
-  Archive, ChevronDown, ChevronLeft, ChevronRight, Inbox, Laptop, Moon, Send,
+  Archive, ChevronDown, ChevronLeft, ChevronRight, Inbox, Laptop, Moon, SquarePen, Send,
   Settings2, ShieldAlert, Sun, Trash2, X, type LucideIcon,
 } from 'lucide-react'
 import { useDomains, useMe } from '@/lib/api/queries'
@@ -28,9 +28,10 @@ interface Props {
   /** Gaveta aberta (telas pequenas). */
   open: boolean
   onClose: () => void
+  onCompose: () => void
 }
 
-export function Sidebar({ nav, onNavigate, collapsed, onCollapse, open, onClose }: Props) {
+export function Sidebar({ nav, onNavigate, collapsed, onCollapse, open, onClose, onCompose }: Props) {
   const me = useMe()
   const domains = useDomains()
   const items = domains.data?.items ?? []
@@ -65,6 +66,24 @@ export function Sidebar({ nav, onNavigate, collapsed, onCollapse, open, onClose 
           )}
           <button onClick={onClose} aria-label="Fechar menu" className="ml-auto rounded-lg p-2 text-muted-foreground hover:bg-sidebar-accent md:hidden">
             <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="px-2 pt-4">
+          <button
+            onClick={() => {
+              onCompose()
+              onClose()
+            }}
+            aria-label="Escrever"
+            title="Escrever"
+            className={cn(
+              'flex h-10 w-full items-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/90',
+              collapsed ? 'justify-center' : 'px-3',
+            )}
+          >
+            <SquarePen className="size-4 shrink-0" aria-hidden="true" />
+            {!collapsed && 'Escrever'}
           </button>
         </div>
 

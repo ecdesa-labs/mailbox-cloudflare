@@ -4,7 +4,7 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import type { Page, ListItem, MessageDetail, Thread, Rule, MessagePatch } from './types';
+import type { Page, ListItem, MessageDetail, Thread, Rule, MessagePatch, SendInput } from './types';
 import { apiClient } from './client';
 
 // Query Keys
@@ -107,6 +107,19 @@ export function useBulkPatchMessages() {
         queryKey: queryKeys.messages(),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.domains() });
+    },
+  });
+}
+
+export function useSendMessage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: SendInput) => apiClient.sendMessage(input),
+    onSuccess: () => {
+      // Enviados, a thread da resposta e a busca.
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads() });
     },
   });
 }

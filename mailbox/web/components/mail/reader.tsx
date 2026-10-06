@@ -3,23 +3,30 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle, Archive, ChevronDown, ChevronLeft, Download, File, FileImage, ImageOff, Inbox, Mail,
-  MailOpen, ShieldAlert, Star, Trash2, type LucideIcon,
+  MailOpen, Reply, ReplyAll, ShieldAlert, Star, Trash2, type LucideIcon,
 } from 'lucide-react'
 import { useMessage, useThread } from '@/lib/api/queries'
 import { ApiRequestError, type Attachment, type ListItem, type MessageDetail, type MessagePatch, type Person, type Thread } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
+import type { ComposeMode } from './compose'
 import { EmailFrame } from './email-frame'
 import { FOLDER_LABELS, formatBytes, formatFullDate, formatListDate } from './format'
 import { ErrorState, ReaderSkeleton } from './states'
 
 type Act = (items: ListItem[], patch: MessagePatch, opts?: { undoable?: boolean }) => void
+type OnReply = (mode: Exclude<ComposeMode, 'new'>, original: MessageDetail) => void
+
+/** "Responder a todos" só faz sentido com mais de um destinatário. */
+function manyRecipients(d: MessageDetail): boolean {
+  return d.to.length + d.cc.length > 1
+}
 
 function who(p: Person | null | undefined): string {
   if (!p) return '(sem remetente)'
   return p.name ? `${p.name} <${p.addr}>` : p.addr
 }
 
-export function Reader({ id, onBack, onAct }: { id: string; onBack: () => void; onAct: Act }) {
+export function Reader({ id, onBack, onAct, onReply }: { id: string; onBack: () => void; onAct: Act; onReply: OnReply }) {
   const message = useMessage(id || null)
   const data = message.data
   // Conversa: só quando a thread tem mais de uma mensagem.
@@ -46,7 +53,7 @@ export function Reader({ id, onBack, onAct }: { id: string; onBack: () => void; 
         <button onClick={onBack} className="flex items-center gap-1 rounded-lg p-2 text-sm text-muted-foreground hover:bg-accent lg:hidden">
           <ChevronLeft className="size-4" aria-hidden="true" /> Voltar
         </button>
-        {data && <Toolbar detail={data} onAct={onAct} />}
+        {data && <Toolbar detail={data} onAct={onAct} onReply={onReply} />}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {message.isLoading ? (
@@ -57,10 +64,29 @@ export function Reader({ id, onBack, onAct }: { id: string; onBack: () => void; 
             onRetry={() => void message.refetch()}
           />
         ) : conversation ? (
-          <Conversation key={`${conversation.id}:${id}`} thread={conversation} openId={id} onAct={onAct} />
+          // Mensagem nova na conversa (ex.: a resposta enviada) remonta com ela aberta.
+          <Conversation key={`${conversation.id}:${id}:${conversation.messages.length}`} thread={conversation} openId={id} onAct={onAct} />
         ) : data ? (
           <MessageBody id={id} onAct={onAct} />
         ) : null}
+        {data && !message.isError && (
+          <div className="flex gap-2 px-5 pb-6 sm:px-6">
+            <button
+              onClick={() => onReply('reply', data)}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-accent"
+            >
+              <Reply className="size-4" aria-hidden="true" /> Responder
+            </button>
+            {manyRecipients(data) && (
+              <button
+                onClick={() => onReply('reply-all', data)}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-accent"
+              >
+                <ReplyAll className="size-4" aria-hidden="true" /> Responder a todos
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </section>
   )
@@ -169,7 +195,7 @@ function MessageBody({ id, onAct, compact = false }: { id: string; onAct: Act; c
   return <Body detail={data} remote={remote} onLoadRemote={() => setRemote(true)} compact={compact} />
 }
 
-function Toolbar({ detail, onAct }: { detail: MessageDetail; onAct: Act }) {
+function Toolbar({ detail, onAct, onReply }: { detail: MessageDetail; onAct: Act; onReply: OnReply }) {
   const moves: { to: MessagePatch['folder']; label: string; icon: LucideIcon }[] = [
     { to: 'inbox', label: 'Mover para a entrada', icon: Inbox },
     { to: 'archive', label: 'Arquivar', icon: Archive },
@@ -178,6 +204,9 @@ function Toolbar({ detail, onAct }: { detail: MessageDetail; onAct: Act }) {
   ]
   return (
     <div className="ml-auto flex items-center gap-0.5 lg:ml-0">
+      <ToolButton icon={Reply} label="Responder" onClick={() => onReply('reply', detail)} />
+      {manyRecipients(detail) && <ToolButton icon={ReplyAll} label="Responder a todos" onClick={() => onReply('reply-all', detail)} />}
+      <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
       {moves
         .filter((m) => m.to !== detail.folder && !(detail.folder === 'sent' && m.to === 'inbox'))
         .map((m) => (

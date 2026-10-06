@@ -10,6 +10,9 @@ import type {
   MessagePatch,
   RuleInput,
   RulePatch,
+  Recipient,
+  SendInput,
+  SendResult,
 } from './types';
 import { domains, messages, messageDetails, rules } from './fixtures';
 
@@ -168,6 +171,70 @@ export const mockApi = {
       subject: threadMessages[0].subject?.replace(/^\s*((re|fwd?|enc|res)\s*:\s*)+/i, '').toLowerCase() ?? null,
       messages: threadMessages,
     };
+  },
+
+  /**
+   * Como a API: remetente precisa ser identidade cadastrada; resposta só
+   * pelo domínio da original. Para testar erros: destinatário `recusa@...`
+   * devolve 422 (recusado pelo serviço) e `falha@...`, 502.
+   */
+  async sendMessage(input: SendInput): Promise<SendResult> {
+    await delay(600);
+
+    const domain = domains.find((d) => d.identities.some((i) => i.id === input.from_identity_id));
+    const identity = domain?.identities.find((i) => i.id === input.from_identity_id);
+    if (!domain || !identity) throw createError(404, 'not_found', 'identidade não encontrada');
+    const original = input.in_reply_to ? messagesState.find((m) => m.id === input.in_reply_to) : undefined;
+    if (input.in_reply_to && !original) throw createError(404, 'not_found', 'mensagem original não encontrada');
+    if (original && original.domain !== domain.name) {
+      throw createError(400, 'bad_request', `from_identity_id: a resposta sai pelo domínio da original (${original.domain})`);
+    }
+    const people = (list: Recipient[] = []) =>
+      list.map((r) => (typeof r === 'string' ? { name: null, addr: r } : { name: r.name ?? null, addr: r.addr }));
+    const to = people(input.to);
+    const cc = people(input.cc);
+    if (to.length === 0) throw createError(400, 'bad_request', 'to: ao menos um destinatário');
+    if (to.length + cc.length > 50) throw createError(400, 'bad_request', 'to: no máximo 50 destinatários (to + cc)');
+    if ([...to, ...cc].some((p) => p.addr.startsWith('recusa@'))) {
+      throw createError(422, 'rejected', 'E_SENDER_NOT_VERIFIED: domínio do remetente não verificado no Email Sending');
+    }
+    if ([...to, ...cc].some((p) => p.addr.startsWith('falha@'))) {
+      throw createError(502, 'unavailable', 'falha no serviço de envio');
+    }
+
+    const now = Date.now();
+    const item: ListItem = {
+      id: createUlid(),
+      thread_id: original?.thread_id ?? createUlid(),
+      domain: domain.name,
+      identity: identity.address,
+      from: { name: identity.label, addr: identity.address },
+      subject: input.subject,
+      snippet: input.text.replace(/\s+/g, ' ').trim().slice(0, 200) || null,
+      received_at: now,
+      is_read: true,
+      is_starred: false,
+      has_attachments: false,
+      folder: 'sent',
+      processing: 'full',
+    };
+    messagesState.push(item);
+    messageDetails[item.id] = {
+      ...item,
+      to,
+      cc,
+      date: now,
+      message_id: `${item.id}@${domain.name}`,
+      envelope_to: identity.address,
+      size: input.text.length,
+      text: input.text,
+      html: null,
+      has_remote_images: false,
+      auth: { spf: null, dkim: null, dmarc: null },
+      attachments: [],
+      raw_url: `/api/messages/${item.id}/raw`,
+    };
+    return { id: item.id, thread_id: item.thread_id, stored: 'indexed' };
   },
 
   async patchMessage(id: string, patch: MessagePatch): Promise<ListItem> {
