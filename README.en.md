@@ -65,109 +65,12 @@ with three handlers:
 
 ## Usage
 
-### Requirements
+**To install, follow the [installation guide](docs/installation.en.md).** It
+goes from zero (account and domain on Cloudflare) to a mailbox that receives
+and sends, in order, with what to do in the Cloudflare dashboard and in the
+terminal, and why each step matters.
 
-- A Cloudflare account with the domain(s) already added.
-- Linux or macOS with [Rust](https://rustup.rs), Node.js (for `npx wrangler`),
-  Python 3, [just](https://github.com/casey/just) and, on Debian/Ubuntu:
-
-  ```bash
-  sudo apt install -y pkg-config libssl-dev
-  ```
-
-> **Warning:** enabling Email Routing on a domain **replaces its MX records**.
-> If the domain already receives email at another provider, migrate those
-> mailboxes first.
-
-### From zero to deploy
-
-```bash
-just setup    # once: wasm32 target and worker-build
-just doctor   # checks for missing tools
-just up --domain example.com --label Example --color '#2563EB'
-```
-
-`just up` runs, in order:
-
-1. **configure**: saves the instance and generates the configuration files;
-2. **login**: opens the Cloudflare login if there is no session yet;
-3. **bootstrap**: creates the R2 bucket, the D1 database and the queues that
-   don't exist yet, and saves the D1 id;
-4. **deploy**: runs CI, applies the migrations to the remote D1, publishes the
-   Worker and tests `GET /api/ping`.
-
-Running it again is safe: nothing is recreated. Without arguments, `just up`
-uses the instance that is already configured.
-
-### Receiving email
-
-After deploying, enable Email Routing and validate with one address before
-sending the whole domain to the Worker:
-
-```bash
-just email-enable                    # replaces the domain's MX records
-just email-route test@example.com    # only this address goes to the Worker
-just email-catchall                  # after validating: every address
-```
-
-If the domain has a **Null MX** (`MX 0 .`) or an SPF of `v=spf1 -all` (a
-"domain without email" setup), `email-enable` is refused: remove the Null MX
-and change the SPF to `v=spf1 include:_spf.mx.cloudflare.net ~all` in the
-dashboard first.
-
-### Sending email
-
-Requires the **Workers Paid** plan (US$ 5/month, with 3,000 emails per month
-included). The Worker already ships with the `send_email` binding (`MAILER`);
-what's left is verifying the domain in **Email Sending**:
-
-1. In the dashboard: **Compute → Email Service → Email Sending → Onboard
-   Domain** and pick the domain. Cloudflare creates the DKIM record
-   (`cf-bounce._domainkey`) and the SPF/MX records for the `cf-bounce`
-   subdomain (the envelope and bounce domain).
-2. Check that the domain's DMARC is still what you want (e.g. `p=reject`):
-   DKIM signs as the domain itself, so alignment passes.
-
-The sender is always an identity of the domain. An identity is created when an
-address receives its first email, or with:
-
-```bash
-just email-address new@example.com "Display name"
-```
-
-which creates the address's route in Email Routing (so replies arrive) and the
-identity (so it shows up in **From**). Without a catch-all, only addresses
-with a route receive email: run this command before sending from a new
-address. Running it again is safe; the name only changes if you pass one. A
-reply is sent from the identity that received the original and never from
-another domain. A copy of what was sent is kept in R2 and in **Sent**, in the
-same thread.
-
-Without a verified domain, sending is refused (`422`, code
-`E_SENDER_NOT_VERIFIED`).
-
-### Protecting with Cloudflare Access
-
-The API only answers requests that went through Access; until it's configured,
-it denies everything.
-
-1. In the dashboard: **Workers & Pages → mailbox → Access → Protect this Worker
-   behind Access**. Choose the policy (e.g. only your Cloudflare account).
-2. In **Zero Trust → Access → Applications**, open the application that was
-   created and copy the **team domain** and the **Application Audience (AUD)
-   Tag**.
-3. Save them to the instance and deploy:
-
-   ```bash
-   just configure --access-team yourteam.cloudflareaccess.com --access-aud <AUD> --allowed-email you@example.com
-   just deploy
-   ```
-
-4. Open `https://<worker>.<account>.workers.dev/api/me` in the browser: after
-   logging in, it shows your email.
-
-To develop locally without Access, copy `mailbox/.dev.vars.example` to
-`mailbox/.dev.vars` (only works on `localhost`).
+The summary below is a reference for those who have already installed it.
 
 ### Several domains
 
@@ -292,6 +195,7 @@ wrangler login, outside the project), but they do identify your account.
 ```
 mailbox-cloudflare/
   justfile              end-to-end workflow
+  docs/                 installation guide (pt-BR and en)
   scripts/              setup_instance.py, email_address.py, contract_test.py and tests
   mailbox/              the product
     crates/

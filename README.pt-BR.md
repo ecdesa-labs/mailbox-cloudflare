@@ -64,102 +64,12 @@ com três handlers:
 
 ## Como usar
 
-### Pré-requisitos
+**Para instalar, siga o [guia de instalação](docs/instalacao.pt-BR.md).** Ele
+vai do zero (conta e domínio na Cloudflare) até a caixa recebendo e enviando,
+em ordem, com o que fazer no painel da Cloudflare e no terminal, e o porquê de
+cada passo.
 
-- Uma conta Cloudflare com o(s) domínio(s) já adicionado(s).
-- Linux ou macOS com [Rust](https://rustup.rs), Node.js (para o `npx wrangler`),
-  Python 3, [just](https://github.com/casey/just) e, no Debian/Ubuntu:
-
-  ```bash
-  sudo apt install -y pkg-config libssl-dev
-  ```
-
-> **Atenção:** ativar o Email Routing num domínio **substitui os registros MX**.
-> Se o domínio já recebe email em outro provedor, migre as caixas antes.
-
-### Do zero ao deploy
-
-```bash
-just setup    # uma vez: target wasm32 e worker-build
-just doctor   # confere se falta alguma ferramenta
-just up --domain exemplo.com.br --label Exemplo --color '#2563EB'
-```
-
-O `just up` faz, em ordem:
-
-1. **configure**: grava a instância e gera os arquivos de configuração;
-2. **login**: abre o login da Cloudflare, se ainda não houver sessão;
-3. **bootstrap**: cria o bucket R2, o banco D1 e as filas que ainda não existem e grava o id do D1;
-4. **deploy**: roda o CI, aplica as migrações no D1 remoto, publica o Worker e
-   testa `GET /api/ping`.
-
-Rodar de novo é seguro: nada é recriado. Sem argumentos, `just up` usa a
-instância já configurada.
-
-### Receber emails
-
-Depois do deploy, ligue o Email Routing e valide com um endereço antes de
-mandar o domínio inteiro para o Worker:
-
-```bash
-just email-enable                       # troca os MX do domínio
-just email-route teste@exemplo.com.br   # só este endereço vai para o Worker
-just email-catchall                     # depois de validar: todos os endereços
-```
-
-Se o domínio tiver um **Null MX** (`MX 0 .`) ou SPF `v=spf1 -all` (configuração
-de "domínio sem email"), o `email-enable` é recusado: remova o Null MX e troque
-o SPF por `v=spf1 include:_spf.mx.cloudflare.net ~all` no painel antes.
-
-### Enviar emails
-
-Exige o plano **Workers Paid** (US$ 5/mês, com 3.000 envios por mês
-incluídos). O Worker já sai com o binding `send_email` (`MAILER`); falta
-verificar o domínio no **Email Sending**:
-
-1. No painel: **Compute → Email Service → Email Sending → Onboard Domain** e
-   escolha o domínio. A Cloudflare cria o DKIM (`cf-bounce._domainkey`) e o
-   SPF/MX do subdomínio `cf-bounce` (domínio do envelope e dos bounces).
-2. Confira que o DMARC do domínio continua como você quer (ex.: `p=reject`):
-   o DKIM assina como o próprio domínio, então o alinhamento passa.
-
-O remetente é sempre uma identidade do domínio. Ela nasce quando um
-endereço recebe o primeiro email, ou com:
-
-```bash
-just email-address novo@exemplo.com.br "Nome de exibição"
-```
-
-que cria a rota do endereço no Email Routing (para a resposta chegar) e a
-identidade (para ele aparecer no **De**). Sem catch-all, só entra email para
-endereços com rota: use esse comando antes de mandar de um endereço novo.
-Rodar de novo é seguro; o nome só muda se for informado. Uma resposta sai pela
-identidade que recebeu a original e nunca por outro domínio. A cópia do que
-foi enviado fica no R2 e em **Enviados**, na mesma thread.
-
-Sem o domínio verificado, o envio é recusado (`422`, código
-`E_SENDER_NOT_VERIFIED`).
-
-### Proteger com o Cloudflare Access
-
-A API só responde a quem passou pelo Access; sem configurar, ela nega tudo.
-
-1. No painel: **Workers & Pages → mailbox → Access → Protect this Worker
-   behind Access**. Escolha a política (ex.: só a sua conta Cloudflare).
-2. Em **Zero Trust → Access → Applications**, abra a aplicação criada e copie
-   o **team domain** e o **Application Audience (AUD) Tag**.
-3. Grave na instância e publique:
-
-   ```bash
-   just configure --access-team seutime.cloudflareaccess.com --access-aud <AUD> --allowed-email voce@exemplo.com
-   just deploy
-   ```
-
-4. Abra `https://<worker>.<conta>.workers.dev/api/me` no navegador: depois do
-   login, ele mostra o seu email.
-
-Para desenvolver local sem Access, copie `mailbox/.dev.vars.example` para
-`mailbox/.dev.vars` (só funciona em `localhost`).
+O resumo abaixo é referência para quem já instalou.
 
 ### Vários domínios
 
@@ -279,6 +189,7 @@ wrangler, fora do projeto), mas identificam a sua conta.
 ```
 mailbox-cloudflare/
   justfile              fluxo de ponta a ponta
+  docs/                 guia de instalação (pt-BR e en)
   scripts/              setup_instance.py, email_address.py, contract_test.py e testes
   mailbox/              o produto
     crates/
