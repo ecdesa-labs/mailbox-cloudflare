@@ -1,6 +1,6 @@
 # mailbox
 
-Componente principal: o Worker em Rust. Visão geral e uso no [README da raiz](../README.md).
+Componente principal: o Worker em Rust. Visão geral e uso no [README da raiz](../README.pt-BR.md) ([English](../README.en.md)).
 
     sudo apt install -y pkg-config libssl-dev   # uma vez
     just setup                                   # uma vez
