@@ -1,7 +1,8 @@
 # v0 · Fase 1 do front: shell, design system e `lib/api`
 
-> Cole tudo abaixo da linha no v0.dev. Os tipos vêm de
-> `mailbox/worker/openapi.json`; se a API mudar, atualize-os aqui antes.
+> Cole no v0.dev só o que está abaixo da linha. Os tipos vêm de
+> `mailbox/worker/openapi.json`: quando o contrato mudar, refaça os tipos deste
+> arquivo antes de usar.
 
 ---
 
