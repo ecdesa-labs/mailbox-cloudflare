@@ -307,7 +307,7 @@ Next.js estático em `mailbox/web`, servido pelo mesmo Worker.
 | 2 | Lista: busca, seleção em lote, ações com desfazer | ✅ |
 | 3 | Leitor: HTML isolado, imagens remotas sob demanda, anexos | ✅ |
 | 4 | Threads: conversa agrupada, mensagens recolhíveis | ✅ |
-| 5 | Atalhos de teclado e ajuda (`?`) | |
+| 5 | Atalhos de teclado e ajuda (`?`) | ✅ |
 | 6 | Compor e responder | ✅ |
 | 7 | Tela de regras de roteamento | |
 | 8 | Polimento para celular | |
