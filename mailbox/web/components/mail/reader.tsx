@@ -295,7 +295,8 @@ function Body({ detail, remote, onLoadRemote, compact }: {
           )}
           <dt className="text-muted-foreground">Data</dt>
           <dd>{formatFullDate(detail.date ?? detail.received_at)}</dd>
-          {detail.identity && detail.identity !== detail.to[0]?.addr && (
+          {/* Num enviado, a identidade é o próprio remetente. */}
+          {detail.folder !== 'sent' && detail.identity && detail.identity !== detail.to[0]?.addr && (
             <>
               <dt className="text-muted-foreground">Recebido por</dt>
               <dd className="truncate">{detail.identity}</dd>
